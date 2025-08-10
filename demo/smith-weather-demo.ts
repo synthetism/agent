@@ -10,7 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { AI } from '@synet/ai';
+import { AI, AIOperator } from '@synet/ai';
 import { Smith } from '../src/smith.unit.js';
 import { WeatherUnit } from '../src/tools/weather.unit.js';
 import { NodeFileSystem, ObservableFileSystem } from '@synet/fs/promises';
@@ -20,12 +20,15 @@ import { AsyncFileSystem } from "@synet/fs";
 async function runSmithWeatherDemo() {
   console.log('🕶️  Agent Smith Weather Demo');
   console.log('===============================\n');
+  
+  const provider = 'anthropic';
+  const model = 'claude-sonnet-4-20250514';
 
   try {
     // Step 1: Load API keys
     console.log('🔑 Loading API keys...');
-    const openaiConfig = JSON.parse(
-      readFileSync(path.join('private', 'deepseek.json'), 'utf-8')
+    const aiconfig = JSON.parse(
+      readFileSync(path.join('private', `${provider}.json`), 'utf-8')
     );
     const weatherConfig = JSON.parse(
       readFileSync(path.join('private', 'openweather.json'), 'utf-8')
@@ -76,10 +79,13 @@ async function runSmithWeatherDemo() {
 
     // Step 4: Create AI operator and teach it tools
     console.log('🤖 Creating AI operator...');
-    const ai = AI.deepseek({
-      apiKey: openaiConfig.apiKey,
-      model: 'deepseek-chat'
-    });
+    const ai = AIOperator.create({
+        type: provider,
+        options: {
+          apiKey: aiconfig.apiKey,
+          model: model,
+        },
+      });
     console.log('✅ AI operator created');
     
     console.log('🧠 Teaching AI the tools...');
@@ -96,40 +102,47 @@ async function runSmithWeatherDemo() {
     console.log('✅', smith.whoami());
     console.log();
 
-    // Step 7: Smith mission with tools
-    console.log('🎯 Executing Smith weather mission...\n');
+    // Step 7: Smith creative beach destination mission
+    console.log('�️  Executing Smith creative beach destination mission...\n');
     
     const mission = `
     
-    Mission: Weather Intelligence Report
+    Mission: Ultimate Beach Destination Intelligence
 
 Task: 
 
-1. Get current weather for Tokyo, Japan
-2. Get current weather for London, UK  
-3. Based on collected information, create intelligence report.
-4. Ask to save the report to 'vault/weather-report.md' in markdown format using tools. Prompt AI to use the file system tool.
+You are a luxury travel intelligence analyst. Your mission is to discover and recommend the perfect beach destination for immediate travel based on current weather conditions and regional attractions.
 
 Requirements:
-- You are manager. Use only prompts to gather information from other AI Workers.
-- You need to think how to implement the overall mission and prompt the AI Worker to complete tasks.
-- Use context to pass collected information to the worker when the task is asked for it.
-- Determine if the mission is complete  "MISSION_COMPLETE"`;
+1. Research weather conditions for 3-4 diverse coastal locations worldwide (choose strategically from different regions/hemispheres)
+2. Analyze current weather patterns to identify optimal beach conditions (temperature, precipitation, wind, visibility)
+3. Consider seasonal factors and local attractions/activities available 
+4. Generate a comprehensive travel intelligence report with your expert recommendation
+5. Save the complete analysis and recommendation to 'vault/beach-destination-intelligence.md' in professional markdown format
+
+Success Criteria:
+- Weather data from multiple global coastal destinations
+- Strategic analysis of optimal beach conditions
+- Expert travel recommendation with reasoning
+- Professional intelligence-grade report with actionable insights
+
+Think like a luxury travel consultant with access to real-time weather intelligence. Make this recommendation count!
+`;
 
     const result = await smith.executeMission(mission);
     
     console.log('\n📊 Mission Summary:');
     console.log('==================');
-    console.log(`Goal: Weather Intelligence Report`);
+    console.log(`Goal: Ultimate Beach Destination Intelligence`);
     console.log(`Completed: ${result.completed}`);
     console.log(`Iterations: ${result.iterations}`);
     console.log(`Messages: ${result.messages.length}`);
     
     if (result.completed) {
-      console.log('✅ Smith weather mission successful!');
-      console.log('\n📄 Check weather-report.txt for the saved report');
+      console.log('✅ Smith beach destination mission successful!');
+      console.log('\n🏖️ Check vault/beach-destination-intelligence.md for the luxury travel recommendation');
     } else {
-      console.log('⚠️  Smith weather mission incomplete');
+      console.log('⚠️  Smith beach destination mission incomplete');
     }
 
   } catch (error) {

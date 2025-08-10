@@ -158,9 +158,9 @@ export class Smith extends Unit<SmithProps> {
 
     try {
       // STEP 1: Entry call - get task breakdown
-      console.log(`📋 [Smith] Breaking down mission into steps...`);
+      console.log(`[Smith] Breaking down mission into steps...`);
       const taskBreakdown = await this.getTaskBreakdown(task);
-      console.log(`📝 [Smith] Task breakdown:\n${taskBreakdown}`);
+      console.log(`[Smith] Task breakdown:\n${taskBreakdown}`);
       
       smithMemory.push({
         role: 'user',
@@ -173,11 +173,11 @@ export class Smith extends Unit<SmithProps> {
       // STEP 2: Execute steps individually
       while (!execution.completed && execution.iterations < this.props.maxIterations) {
         execution.iterations++;
-        console.log(`🔄 [Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
+        console.log(`[Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
         // Generate next specific prompt
         const workerPrompt = await this.generateNextWorkerPrompt(smithMemory, task);
-        console.log(`📝 [Smith] Generated worker prompt: ${workerPrompt}`);
+        console.log(`[Smith] Generated worker prompt: ${workerPrompt}`);
 
         // Add prompt to worker memory
         workerMemory.push({
@@ -187,7 +187,7 @@ export class Smith extends Unit<SmithProps> {
 
         // Worker AI executes with tools AND has memory of previous work
         const response = await this.props.ai.chatWithTools(workerMemory);
-        console.log(`💭 [Smith] Worker AI Response: ${response.content}`);
+        console.log(`[Worker]: ${response.content}`);
 
         // Add response to worker memory
         workerMemory.push({
@@ -257,10 +257,11 @@ export class Smith extends Unit<SmithProps> {
     const breakdownPrompt = `.
 
 YOUR MISSION: ${task}
-AVAILABLE TOOLS: ${availableTools}
-USE TEMPLATE TO DIRECT AI WORKER: "${this.props.identity.promptTemplate}"
+AVAILABLE TOOLS (ALL AVAILABLE TO WORKERS): ${availableTools}
+USE PROMPT INSTRUCTIONS TO DIRECT AI WORKER: "${this.props.identity.promptTemplate}"
+FORMAT: Use plain text prompts, don't use markdown, unless required by the task. 
 
-Break this mission down into discrete, executable steps. Each step should use ONE specific tool.
+Break this mission down into discrete, executable steps. Each step should use ONE specific tool. Use only tools that are listed. 
 
 Respond with a numbered breakdown and follow your plan to accomplis the mission.`;
 
@@ -337,22 +338,12 @@ If you have access to tools that could enhance this report, feel free to use the
    * Using promptTemplate as foundation with AI filling in the details
    */
   private async generateNextWorkerPrompt(smithMemory: ChatMessage[], originalTask: string): Promise<string> {
-    const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
-    
-    // Build a summary of what's been accomplished so far
-    const conversationSummary = await this.buildProgressSummary(smithMemory);
-    
+  
     // Smith asks his AI to structure the prompt using the template
     const promptGenerationRequest = `
-You are Agent Smith orchestrating a mission. Analyze the progress and determine the NEXT SINGLE ACTION.
+Your goal is to generate the next prompt for your AI assistant. 
 
-ORIGINAL MISSION: ${originalTask}
-AVAILABLE TOOLS: ${availableTools}
-
-PROGRESS SO FAR:
-${conversationSummary}
-
-USE FOLLOWING PROMPT TEMPLATE:
+Use following prompt as a guidance:
 "${this.props.identity.promptTemplate}"
 
 INSTRUCTIONS:
@@ -362,15 +353,13 @@ INSTRUCTIONS:
    - %%task%% = the specific single task for the worker
    - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
    - %%goal%% = what the worker should achieve with this tool
-   - %%context%% = CRITICAL: Include relevant data/results from previous steps that the worker needs to complete this task
-4. Extract any data, reports, or information from conversation history that the worker will need
-5. Make the worker feel like they're collaborating with you, not starting fresh each time
-
+ 
 CONSTRAINTS:
-- ONE tool call only
+- ONE tool call only. Some tools can be executed concurrently if instructed, but default in sequential.
 - Do NOT repeat completed actions
-- Provide rich context so worker has all information needed
-- Be specific about tool parameters needed
+- Provide context so worker follows the workflow.
+- Be specific about tool parameters needed and provide instructions.
+- Use only tools from the list provided. 
 
 Generate the worker prompt using the template format with ALL variables filled in.
 `;
@@ -518,18 +507,7 @@ COMPLETION SIGNALS: ${this.props.identity.completionSignals.join(', ')}
   }
 
 
-  private createContextualSystemPrompt(): string {
-    const learnedTools = this.capabilities().list().filter(cap => !cap.startsWith('smith.'));
-    
-    return `
-    ${this.props.systemPrompt}
 
-    AVAILABLE TOOLS:
-    ${learnedTools.length > 0 ? learnedTools.join('\n- ') : 'No tools learned yet'}
-
-    Remember: Execute tools step by step and report "MISSION_COMPLETE" when done.`;
-
-  }
 
   // =============================================================================
   // UNIT ARCHITECTURE METHODS
