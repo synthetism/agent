@@ -1,19 +1,22 @@
 /**
- * Agent Smith - AI Tool Caller with Chat-based Workflow
+ * Agent Smith - AI Mission Orchestrator with Identity System
  * 
- * Smith uses AI chat with full history to:
- * 1. Parse goals into actionable steps  
- * 2. Decide which tools to call next
- * 3. Detect when goals are complete
- * 4. Handle errors through AI reasoning
+ * Smith loads identity from config and orchestrates other AIs to execute missions.
+ * Following @synet/ai pattern: no capabilities, no schemas - pure orchestrator.
  * 
- * Following Unit Architecture principles with AI dependency injection
+ * Smith's role:
+ * 1. Load identity configuration 
+ * 2. Learn available tools from other units
+ * 3. Generate prompts for worker AIs to execute tools
+ * 4. Monitor responses and decide next actions
  */
 
 import { Unit, createUnitSchema, UnitProps } from '@synet/unit';
 import { Capabilities, Schema, Validator, UnitCore } from '@synet/unit';
 import { Capabilities as CapabilitiesClass, Schema as SchemaClass, Validator as ValidatorClass } from '@synet/unit';
-import type { AIOperator, ChatMessage } from '@synet/ai';
+import type { AIOperator, AIResponse, ChatMessage } from '@synet/ai';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const VERSION = '1.0.0';
 
@@ -21,16 +24,37 @@ const VERSION = '1.0.0';
 // TYPES
 // =============================================================================
 
+interface SmithIdentity {
+  name: string;
+  description: string;
+  objective: string;
+  promptTemplate: string;
+  systemPrompt: string;
+  missionStrategy: {
+    analysis: string;
+    toolSelection: string;
+    promptGeneration: string;
+    responseEvaluation: string;
+  };
+  completionSignals: string[];
+  errorRecovery: {
+    maxRetries: number;
+    fallbackStrategy: string;
+    escalationThreshold: string;
+  };
+}
+
 interface SmithConfig {
   ai: AIOperator;
-  systemPrompt?: string;
+  identityPath?: string;
   maxIterations?: number;
 }
 
 interface SmithProps extends UnitProps {
   ai: AIOperator;
-  systemPrompt: string;
+  identity: SmithIdentity;
   maxIterations: number;
+  learnedTools: string[];
 }
 
 interface SmithExecution {
@@ -56,50 +80,11 @@ export class Smith extends Unit<SmithProps> {
   // =============================================================================
 
   protected build(): UnitCore {
-    const capabilities = CapabilitiesClass.create(this.dna.id, {
-      executeMission: (...args: unknown[]) => this.executeMission(args[0] as string),
-      chatWithAI: (...args: unknown[]) => this.chatWithAI(args[0] as ChatMessage[])
-    });
+    // Smith has no teachable capabilities - he's the orchestrator (following @synet/ai pattern)
+    const capabilities = CapabilitiesClass.create(this.dna.id, {});
 
-    // Smith needs schemas for his own capabilities (not empty like pure orchestrators)
-    const schema = SchemaClass.create(this.dna.id, {
-      executeMission: {
-        name: 'executeMission',
-        description: 'Execute a mission using AI chat workflow',
-        parameters: {
-          type: 'object',
-          properties: {
-            goal: {
-              type: 'string',
-              description: 'The mission goal to execute'
-            }
-          },
-          required: ['goal']
-        },
-        response: { 
-          type: 'object', 
-          properties: { 
-            completed: { type: 'boolean', description: 'Whether mission was completed' }, 
-            iterations: { type: 'number', description: 'Number of iterations used' } 
-          } 
-        }
-      },
-      chatWithAI: {
-        name: 'chatWithAI', 
-        description: 'Chat directly with Smith\'s AI',
-        parameters: {
-          type: 'object',
-          properties: {
-            messages: {
-              type: 'array',
-              description: 'Array of chat messages'
-            }
-          },
-          required: ['messages']
-        },
-        response: { type: 'string' }
-      }
-    });
+    // Smith has no schemas - he orchestrates tools, doesn't become one
+    const schema = SchemaClass.create(this.dna.id, {});
 
     const validator = ValidatorClass.create({
       unitId: this.dna.id,
@@ -120,14 +105,19 @@ export class Smith extends Unit<SmithProps> {
   // =============================================================================
 
   static create(config: SmithConfig): Smith {
+    // Load Smith's identity configuration
+    const identityPath = config.identityPath || path.join(__dirname, '..', 'config', 'smith.json');
+    const identity: SmithIdentity = JSON.parse(readFileSync(identityPath, 'utf-8'));
+
     const props: SmithProps = {
       dna: createUnitSchema({
         id: 'smith',
         version: VERSION
       }),
       ai: config.ai,
-      systemPrompt: config.systemPrompt || Smith.createDefaultSystemPrompt(),
-      maxIterations: config.maxIterations || 10
+      identity,
+      maxIterations: config.maxIterations || 10,
+      learnedTools: []
     };
 
     return new Smith(props);
@@ -138,74 +128,99 @@ export class Smith extends Unit<SmithProps> {
   // =============================================================================
 
   /**
-   * Execute a goal using AI chat workflow
+   * Execute a mission using task breakdown approach:
+   * 1. Entry call - Smith breaks down mission into discrete steps
+   * 2. Execute each step individually  
+   * 3. Analyze result after each step
+   * 4. Continue until complete
+   * 5. Exit call - Smith reports final result
    */
-  async executeMission(goal: string): Promise<SmithExecution> {
-    console.log(`🕶️  [Agent Smith] Mission received: ${goal}`);
+  async executeMission(task: string): Promise<SmithExecution> {
+    console.log(`🕶️  [${this.props.identity.name}] Mission received: ${task}`);
     
     const execution: SmithExecution = {
-      goal,
-      messages: [
-        { role: 'system', content: this.createContextualSystemPrompt() },
-        { role: 'user', content: goal }
-      ],
+      goal: task,
+      messages: [],
       completed: false,
       iterations: 0
     };
 
-    while (!execution.completed && execution.iterations < this.props.maxIterations) {
-      execution.iterations++;
-      console.log(`🔄 [Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
+    // Smith's memory for the full conversation
+    const smithMemory: ChatMessage[] = [
+      { role: 'system', content: this.props.identity.systemPrompt }
+    ];
+
+    try {
+      // STEP 1: Entry call - get task breakdown
+      console.log(`📋 [Smith] Breaking down mission into steps...`);
+      const taskBreakdown = await this.getTaskBreakdown(task);
+      console.log(`📝 [Smith] Task breakdown:\n${taskBreakdown}`);
       
-      try {
-        // AI decides next action with full context
-        const response = await this.props.ai.call(execution.messages[execution.messages.length - 1].content, { 
-          useTools: true 
-        });
+      smithMemory.push({
+        role: 'user',
+        content: `MISSION: ${task}`
+      }, {
+        role: 'assistant', 
+        content: taskBreakdown
+      });
 
-        console.log(`💭 [Smith] AI Response: ${response.content}`);
+      // STEP 2: Execute steps individually
+      while (!execution.completed && execution.iterations < this.props.maxIterations) {
+        execution.iterations++;
+        console.log(`🔄 [Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
+        
+        // Generate next specific prompt
+        const workerPrompt = await this.generateNextWorkerPrompt(smithMemory, task);
+        console.log(`📝 [Smith] Generated worker prompt: ${workerPrompt}`);
 
-        // Add AI response to conversation
-        execution.messages.push({
+        // Worker AI executes with tools
+        const response = await this.props.ai.call(workerPrompt, { useTools: true });
+        console.log(`💭 [Smith] Worker AI Response: ${response.content}`);
+
+        // Add to memory
+        smithMemory.push({
+          role: 'user',
+          content: workerPrompt
+        }, {
           role: 'assistant',
           content: response.content
         });
 
-        // Check if mission is complete
-        const isComplete = this.isGoalComplete(response.content);
-        console.log(`🔍 [Smith] Mission complete check: ${isComplete}`);
+        // Track in execution
+        execution.messages.push({
+          role: 'user',
+          content: workerPrompt
+        }, {
+          role: 'assistant',
+          content: response.content
+        });
+
+        // STEP 3: Analyze result
+        const analysisResult = await this.analyzeResult(smithMemory, response.content);
+        console.log(`🔍 [Smith] Analysis: ${analysisResult}`);
         
-        if (isComplete) {
+        if (analysisResult === 'completed') {
           execution.completed = true;
-          execution.result = response.content;
           console.log(`✅ [Smith] Mission accomplished in ${execution.iterations} iterations`);
           break;
         }
-
-        // Check for errors and let AI handle them
-        if (this.hasErrors(response.content)) {
-          console.log(`⚠️  [Smith] Error detected, asking AI for recovery`);
-          execution.messages.push({
-            role: 'user',
-            content: 'An error occurred. Please analyze and determine next action.'
-          });
-        } else {
-          // Continue workflow
-          execution.messages.push({
-            role: 'user',
-            content: 'Continue with next step of the mission.'
-          });
-        }
-
-      } catch (error: any) {
-        console.error(`❌ [Smith] Execution error:`, error);
-        
-        // Let AI handle the error
-        execution.messages.push({
-          role: 'user',
-          content: `Error occurred: ${error?.message || error}. Please analyze and determine recovery action.`
-        });
+        // If not completed, continue with next step
       }
+
+      // STEP 4: Exit call - final report
+      if (execution.completed) {
+        console.log(`📊 [Smith] Generating final report...`);
+        const finalReport = await this.generateFinalReport(smithMemory);
+        execution.result = finalReport;
+        console.log(`📋 [Smith] Final report: ${finalReport}`);
+      }
+
+    } catch (error: any) {
+      console.error(`❌ [Smith] Execution error:`, error);
+      smithMemory.push({
+        role: 'user',
+        content: `Error occurred: ${error?.message || error}. ${this.props.identity.errorRecovery.fallbackStrategy}`
+      });
     }
 
     if (!execution.completed) {
@@ -216,14 +231,210 @@ export class Smith extends Unit<SmithProps> {
   }
 
   /**
-   * Direct chat with Smith's AI
+   * Entry call - Smith breaks down mission into discrete steps
    */
-  async chatWithAI(messages: ChatMessage[]): Promise<string> {
-    const response = await this.props.ai.call(messages[messages.length - 1].content, { 
-      useTools: true 
-    });
+  private async getTaskBreakdown(task: string): Promise<string> {
+    const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
+    
+    const breakdownPrompt = `You are Agent Smith, mission orchestrator.
+
+MISSION: ${task}
+
+AVAILABLE TOOLS: ${availableTools}
+
+USE TEMPLATE TO DIRECT AI WORKER: "${this.props.identity.promptTemplate}"
+
+Break this mission down into discrete, executable steps. Each step should use ONE specific tool.
+
+Respond with a numbered breakdown that will guide the mission execution.`;
+
+    const response = await this.props.ai.chat([
+      { role: 'system', content: this.props.identity.systemPrompt },
+      { role: 'user', content: breakdownPrompt }
+    ]);
 
     return response.content;
+  }
+
+  /**
+   * Analyze result - determine if step completed or next task needed
+   */
+  private async analyzeResult(smithMemory: ChatMessage[], response: string): Promise<'completed' | 'next_task'> {
+    const analysisPrompt = `Analyze the worker AI response and determine mission status.
+
+WORKER AI RESPONSE: ${response}
+
+Based on the response above and the conversation history, determine:
+- Is the ENTIRE mission completed successfully? 
+- Or should we continue with the next task?
+
+Check for completion signals like "MISSION_COMPLETE", successful file saves, or mission objectives achieved.
+
+Respond with ONLY one word:
+- "completed" if the entire mission is finished
+- "next_task" if we should continue with the next step`;
+
+    smithMemory.push({
+      role: 'user',
+      content: analysisPrompt
+    });
+
+    const analysis = await this.props.ai.chat(smithMemory);
+    
+    // Remove analysis request from memory
+    smithMemory.pop();
+    
+    const result = analysis.content.toLowerCase().trim();
+    return result.includes('completed') ? 'completed' : 'next_task';
+  }
+
+  /**
+   * Exit call - Smith generates final report based on message history
+   */
+  private async generateFinalReport(smithMemory: ChatMessage[]): Promise<string> {
+    const finalReportPrompt = `Mission completed! Generate a final summary report.
+
+CONVERSATION HISTORY:
+${smithMemory.slice(1).map((msg, i) => `${i + 1}. ${msg.role.toUpperCase()}: ${msg.content}`).join('\n')}
+
+Based on the conversation history above, create a concise mission summary:
+
+MISSION SUMMARY:
+- Original Goal: [extract from history]
+- Steps Completed: [list key accomplishments]
+- Final Result: [what was achieved]
+- Status: Mission Complete
+
+If you have access to tools that could enhance this report, feel free to use them.`;
+
+    const response = await this.props.ai.call(finalReportPrompt, { useTools: true });
+    return response.content;
+  }
+
+  async chat(messages: ChatMessage[]): Promise<AIResponse> {
+    const response = await this.props.ai.chat(messages);
+    return response;
+  }
+
+  /**
+   * Smith asks his AI to generate the next prompt for the worker AI
+   * Using promptTemplate as foundation with AI filling in the details
+   */
+  private async generateNextWorkerPrompt(smithMemory: ChatMessage[], originalTask: string): Promise<string> {
+    const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
+    
+    // Build a summary of what's been accomplished so far
+    const conversationSummary = await this.buildProgressSummary(smithMemory);
+    
+    // Smith asks his AI to structure the prompt using the template
+    const promptGenerationRequest = `
+You are Agent Smith orchestrating a mission. Analyze the progress and determine the NEXT SINGLE ACTION.
+
+ORIGINAL MISSION: ${originalTask}
+AVAILABLE TOOLS: ${availableTools}
+
+PROGRESS SO FAR:
+${conversationSummary}
+
+YOUR TEMPLATE TO USE:
+"${this.props.identity.promptTemplate}"
+
+INSTRUCTIONS:
+1. Analyze what has been completed vs what still needs to be done
+2. Identify the NEXT SINGLE TOOL that needs to be used
+3. Use the template above, filling in:
+   - %%task%% = the specific single task for the worker
+   - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
+   - %%goal%% = what the worker should achieve with this tool
+
+CONSTRAINTS:
+- ONE tool call only
+- Do NOT repeat completed actions
+- Be specific about tool parameters needed
+
+Generate the worker prompt using the template format.
+`;
+
+    smithMemory.push({
+      role: 'user',
+      content: promptGenerationRequest
+    });
+
+    // Smith uses his AI to generate the prompt
+    const promptResponse = await this.props.ai.chat(smithMemory);
+    
+    // Remove the prompt generation request from memory (Smith's internal thinking)
+    smithMemory.pop();
+    
+    return promptResponse.content;
+  }
+
+  /**
+   * Build a summary of what has been accomplished so far
+   * Smith analyzes conversation history to determine progress
+   */
+  private async buildProgressSummary(smithMemory: ChatMessage[]): Promise<string> {
+    if (smithMemory.length <= 1) {
+      return "No progress yet - mission just started.";
+    }
+
+    const progressAnalysisPrompt = `Analyze the conversation history and summarize what has been accomplished so far.
+
+CONVERSATION HISTORY:
+${smithMemory.slice(1).map((msg, i) => `${i + 1}. ${msg.role.toUpperCase()}: ${msg.content}`).join('\n')}
+
+Provide a concise summary of:
+1. What actions have been completed successfully
+2. What data/results have been gathered  
+3. What still needs to be done
+
+Focus on concrete accomplishments and avoid repeating the same information.`;
+
+    const response = await this.props.ai.chat([
+      { role: 'system', content: 'You are Agent Smith analyzing mission progress.' },
+      { role: 'user', content: progressAnalysisPrompt }
+    ]);
+
+    return response.content;
+  }
+
+  /**
+   * Apply promptTemplate with variable substitution
+   * Template variables: %%task%%, %%tool%%, %%goal%%
+   */
+  private applyPromptTemplate(task: string, tool: string, goal: string): string {
+    return this.props.identity.promptTemplate
+      .replace(/%%task%%/g, task)
+      .replace(/%%tool%%/g, tool)
+      .replace(/%%goal%%/g, goal);
+  }
+
+  /**
+   * Generate initial worker prompt using identity template (first iteration only)
+   */
+  private generateWorkerPrompt(task: string): string {
+    const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
+    
+    return `${this.props.identity.description}
+
+OBJECTIVE: ${this.props.identity.objective}
+
+MISSION: ${task}
+
+AVAILABLE TOOLS: ${availableTools}
+
+INSTRUCTIONS:
+${this.props.identity.missionStrategy.analysis}
+${this.props.identity.missionStrategy.toolSelection}
+Execute step by step and end with one of: ${this.props.identity.completionSignals.join(', ')}`;
+  }
+
+  /**
+   * Generate next prompt based on previous response (deprecated - use generateNextWorkerPrompt)
+   */
+  private generateNextPrompt(previousResponse: string, originalTask: string): string {
+    // Simple continuation for now - can be made more sophisticated
+    return 'Continue with next step of the mission.';
   }
 
   // =============================================================================
@@ -231,82 +442,83 @@ export class Smith extends Unit<SmithProps> {
   // =============================================================================
 
   /**
-   * Detect if goal is complete based on AI response
+   * Detect if goal is complete using identity completion signals
    */
   private isGoalComplete(response: string): boolean {
-    const completionSignals = [
-      'mission completed',
-      'mission accomplished', 
-      'goal achieved',
-      'task completed',
-      'all done',
-      'objective complete',
-      'MISSION_COMPLETE',
-      '✅'
-    ];
-
     const lowerResponse = response.toLowerCase();
-    return completionSignals.some(signal => lowerResponse.includes(signal));
+    return this.props.identity.completionSignals.some(signal => 
+      lowerResponse.includes(signal.toLowerCase())
+    );
+  }
+
+  // =============================================================================
+  // TOOL LEARNING (No Teaching - Smith is pure orchestrator)
+  // =============================================================================
+
+  /**
+   * Smith learns tools from other units but doesn't teach (like @synet/ai)
+   */
+  learn(contracts: Array<{ unitId: string; capabilities: Capabilities; schema: Schema; validator: Validator }>): void {
+    for (const contract of contracts) {
+      // Extract tool names from capabilities
+      const toolNames = contract.capabilities.list().map(cap => `${contract.unitId}.${cap}`);
+      this.props.learnedTools.push(...toolNames);
+      console.log(`🧠 [${this.props.identity.name}] Learned ${toolNames.length} tools from ${contract.unitId}: ${toolNames.join(', ')}`);
+    }
+  }
+
+  
+  // =============================================================================
+  // UNIT ARCHITECTURE METHODS
+  // =============================================================================
+
+  /**
+   * Smith's identity
+   */
+  whoami(): string {
+    const tools = this.props.learnedTools.length;
+    return `🕶️  ${this.props.identity.name} - ${this.props.identity.description} (${tools} tools available)`;
   }
 
   /**
-   * Detect errors in AI response
+   * Smith's help documentation
    */
-  private hasErrors(response: string): boolean {
-    const errorSignals = [
-      'error',
-      'failed',
-      'exception',
-      'cannot',
-      'unable to',
-      'permission denied',
-      'not found',
-      'timeout'
-    ];
+  help(): string {
+    return `
+${this.props.identity.name} - AI Mission Orchestrator
 
-    const lowerResponse = response.toLowerCase();
-    return errorSignals.some(signal => lowerResponse.includes(signal));
+IDENTITY: ${this.props.identity.description}
+OBJECTIVE: ${this.props.identity.objective}
+
+USAGE:
+  const smith = Smith.create({ ai });
+  smith.learn([fs.teach(), weather.teach()]);
+  
+  const result = await smith.executeMission("Get weather and save report");
+
+METHODS:
+  • executeMission(task) - Execute a mission using worker AI orchestration
+  • learn(contracts) - Learn tools from other units  
+  • whoami() - Show Smith's identity
+
+LEARNED TOOLS: ${this.props.learnedTools.join(', ') || 'None'}
+
+COMPLETION SIGNALS: ${this.props.identity.completionSignals.join(', ')}
+    `;
   }
 
-  // =============================================================================
-  // SYSTEM PROMPTS
-  // =============================================================================
-
-  private static createDefaultSystemPrompt(): string {
-    return `You are Agent Smith. Your mission is to execute goals methodically using available tools.
-
-EXECUTION PROTOCOL:
-1. Analyze the goal and identify required steps
-2. Execute tools one by one with precision
-3. Report progress after each action
-4. When mission is complete, end with "MISSION_COMPLETE"
-
-TOOL USAGE:
-- Use tools to gather data, process information, and save results
-- Always explain what you're doing and why
-- If a tool fails, analyze the error and try alternative approaches
-
-ERROR HANDLING:
-- If something fails, explain the error and propose solutions
-- Try alternative approaches when primary methods fail
-- Ask for clarification if the goal is unclear
-
-COMMUNICATION:
-- Be concise but thorough
-- Report what you've accomplished
-- Indicate when you need to continue vs when you're done
-- Use "MISSION_COMPLETE" when the goal is fully achieved`;
-  }
 
   private createContextualSystemPrompt(): string {
     const learnedTools = this.capabilities().list().filter(cap => !cap.startsWith('smith.'));
     
-    return `${this.props.systemPrompt}
+    return `
+    ${this.props.systemPrompt}
 
-AVAILABLE TOOLS:
-${learnedTools.length > 0 ? learnedTools.join('\n- ') : 'No tools learned yet'}
+    AVAILABLE TOOLS:
+    ${learnedTools.length > 0 ? learnedTools.join('\n- ') : 'No tools learned yet'}
 
-Remember: Execute tools step by step and report "MISSION_COMPLETE" when done.`;
+    Remember: Execute tools step by step and report "MISSION_COMPLETE" when done.`;
+
   }
 
   // =============================================================================
@@ -325,43 +537,4 @@ Remember: Execute tools step by step and report "MISSION_COMPLETE" when done.`;
     };
   }
 
-  /**
-   * Smith's identity
-   */
-  whoami(): string {
-    const tools = this.capabilities().list().length;
-    return `🕶️  Agent Smith - AI Mission Executor (${tools} tools available)`;
-  }
-
-  /**
-   * Smith's help documentation
-   */
-  help(): string {
-    return `
-Agent Smith - AI Tool Caller
-
-USAGE:
-  const smith = Smith.create({ ai });
-  smith.learn([fs.teach(), weather.teach()]);
-  
-  const result = await smith.execute("Get weather and save report");
-
-METHODS:
-  • execute(goal) - Execute a mission using AI workflow
-  • chat(messages) - Direct AI conversation
-  • learn(contracts) - Learn tools from other units
-  • teach() - Share Smith's capabilities
-
-EXAMPLES:
-  await smith.execute("Find weather in Tokyo and save to file");
-  await smith.execute("Research AI trends and create summary");
-  await smith.execute("Debug code and update documentation");
-    `;
-  }
 }
-
-// =============================================================================
-// EXPORTS
-// =============================================================================
-
-export type { SmithConfig, SmithExecution };

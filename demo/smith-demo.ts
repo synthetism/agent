@@ -68,7 +68,7 @@ Format as a structured report and end with "MISSION_COMPLETE"`;
 
     // Step 5: Test direct chat
     console.log('\n💬 Testing direct Smith chat...');
-    const chatResponse = await smith.chatWithAI([
+    const chatResponse = await smith.chat([
       { role: 'user', content: 'What is your primary function, Agent Smith?' }
     ]);
     console.log('Smith:', chatResponse);

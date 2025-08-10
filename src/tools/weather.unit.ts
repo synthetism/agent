@@ -152,10 +152,22 @@ export class WeatherUnit extends Unit<WeatherProps> {
    */
   protected build(): UnitCore {
     const capabilities = CapabilitiesClass.create(this.dna.id, {
-      getCurrentWeather: (...args: unknown[]) => this.getCurrentWeather(args[0] as string, args[1] as 'metric' | 'imperial' | 'kelvin'),
-      getForecast: (...args: unknown[]) => this.getForecast(args[0] as string, args[1] as number),
-      getWeatherByCoords: (...args: unknown[]) => this.getWeatherByCoords(args[0] as number, args[1] as number, args[2] as 'metric' | 'imperial' | 'kelvin'),
-      searchLocation: (...args: unknown[]) => this.searchLocation(args[0] as string)
+      getCurrentWeather: (...args: unknown[]) => {
+        const params = args[0] as { location: string; units?: 'metric' | 'imperial' | 'kelvin' };
+        return this.getCurrentWeather(params.location, params.units);
+      },
+      getForecast: (...args: unknown[]) => {
+        const params = args[0] as { location: string; days?: number };
+        return this.getForecast(params.location, params.days);
+      },
+      getWeatherByCoords: (...args: unknown[]) => {
+        const params = args[0] as { lat: number; lon: number; units?: 'metric' | 'imperial' | 'kelvin' };
+        return this.getWeatherByCoords(params.lat, params.lon, params.units);
+      },
+      searchLocation: (...args: unknown[]) => {
+        const params = args[0] as { query: string };
+        return this.searchLocation(params.query);
+      }
     });
 
     const schema = SchemaClass.create(this.dna.id, {
