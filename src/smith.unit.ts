@@ -236,17 +236,15 @@ export class Smith extends Unit<SmithProps> {
   private async getTaskBreakdown(task: string): Promise<string> {
     const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
     
-    const breakdownPrompt = `You are Agent Smith, mission orchestrator.
+    const breakdownPrompt = `.
 
-MISSION: ${task}
-
+YOUR MISSION: ${task}
 AVAILABLE TOOLS: ${availableTools}
-
 USE TEMPLATE TO DIRECT AI WORKER: "${this.props.identity.promptTemplate}"
 
 Break this mission down into discrete, executable steps. Each step should use ONE specific tool.
 
-Respond with a numbered breakdown that will guide the mission execution.`;
+Respond with a numbered breakdown and follow your plan to accomplis the mission.`;
 
     const response = await this.props.ai.chat([
       { role: 'system', content: this.props.identity.systemPrompt },
@@ -336,7 +334,7 @@ AVAILABLE TOOLS: ${availableTools}
 PROGRESS SO FAR:
 ${conversationSummary}
 
-YOUR TEMPLATE TO USE:
+USE FOLLOWING PROMPT TO COMMAND:
 "${this.props.identity.promptTemplate}"
 
 INSTRUCTIONS:
@@ -346,6 +344,7 @@ INSTRUCTIONS:
    - %%task%% = the specific single task for the worker
    - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
    - %%goal%% = what the worker should achieve with this tool
+4. Provide any additional context or information that may help the worker complete the task and your mission.
 
 CONSTRAINTS:
 - ONE tool call only
@@ -398,16 +397,6 @@ Focus on concrete accomplishments and avoid repeating the same information.`;
     return response.content;
   }
 
-  /**
-   * Apply promptTemplate with variable substitution
-   * Template variables: %%task%%, %%tool%%, %%goal%%
-   */
-  private applyPromptTemplate(task: string, tool: string, goal: string): string {
-    return this.props.identity.promptTemplate
-      .replace(/%%task%%/g, task)
-      .replace(/%%tool%%/g, tool)
-      .replace(/%%goal%%/g, goal);
-  }
 
   /**
    * Generate initial worker prompt using identity template (first iteration only)

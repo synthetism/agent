@@ -99,21 +99,22 @@ async function runSmithWeatherDemo() {
     // Step 7: Smith mission with tools
     console.log('🎯 Executing Smith weather mission...\n');
     
-    const mission = `Mission: Weather Intelligence Report
+    const mission = `
+    
+    Mission: Weather Intelligence Report
 
 Task: 
+
 1. Get current weather for Tokyo, Japan
 2. Get current weather for London, UK  
-3. Create a weather intelligence report
-4. Save the report to 'vault/weather-report.md' in markdown format
+3. Based on collected information, create intelligence report.
+4. Ask to save the report to 'vault/weather-report.md' in markdown format using tools. Prompt AI to use the file system tool.
 
 Requirements:
 - You are manager. Use only prompts to gather information from other AI Workers.
-- Use actual weather data
-- Include temperature comparison
-- Format as professional intelligence report
-- Ask to save file and provide final report
-- End with "MISSION_COMPLETE"`;
+- You need to think how to implement the overall mission and prompt the AI Worker to complete tasks.
+- Use context to pass collected information to the worker when the task is asked for it.
+- Determine if the mission is complete  "MISSION_COMPLETE"`;
 
     const result = await smith.executeMission(mission);
     
