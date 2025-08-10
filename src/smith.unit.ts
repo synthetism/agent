@@ -14,7 +14,8 @@
 import { Unit, createUnitSchema, UnitProps } from '@synet/unit';
 import { Capabilities, Schema, Validator, UnitCore } from '@synet/unit';
 import { Capabilities as CapabilitiesClass, Schema as SchemaClass, Validator as ValidatorClass } from '@synet/unit';
-import type { AIOperator, AIResponse, ChatMessage } from '@synet/ai';
+import type { AIResponse, ChatMessage } from '@synet/ai';
+import { AIOperator } from '@synet/ai';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -150,6 +151,11 @@ export class Smith extends Unit<SmithProps> {
       { role: 'system', content: this.props.identity.systemPrompt }
     ];
 
+    // Worker's memory for collaborative work within mission
+    const workerMemory: ChatMessage[] = [
+      { role: 'system', content: 'You are an AI worker collaborating on a mission. You have access to tools and can see the history of our work together.' }
+    ];
+
     try {
       // STEP 1: Entry call - get task breakdown
       console.log(`📋 [Smith] Breaking down mission into steps...`);
@@ -173,9 +179,21 @@ export class Smith extends Unit<SmithProps> {
         const workerPrompt = await this.generateNextWorkerPrompt(smithMemory, task);
         console.log(`📝 [Smith] Generated worker prompt: ${workerPrompt}`);
 
-        // Worker AI executes with tools
-        const response = await this.props.ai.call(workerPrompt, { useTools: true });
+        // Add prompt to worker memory
+        workerMemory.push({
+          role: 'user',
+          content: workerPrompt
+        });
+
+        // Worker AI executes with tools AND has memory of previous work
+        const response = await this.props.ai.chatWithTools(workerMemory);
         console.log(`💭 [Smith] Worker AI Response: ${response.content}`);
+
+        // Add response to worker memory
+        workerMemory.push({
+          role: 'assistant',
+          content: response.content
+        });
 
         // Add to memory
         smithMemory.push({
@@ -278,7 +296,7 @@ Respond with ONLY one word:
     });
 
     const analysis = await this.props.ai.chat(smithMemory);
-    
+
     // Remove analysis request from memory
     smithMemory.pop();
     
@@ -334,7 +352,7 @@ AVAILABLE TOOLS: ${availableTools}
 PROGRESS SO FAR:
 ${conversationSummary}
 
-USE FOLLOWING PROMPT TO COMMAND:
+USE FOLLOWING PROMPT TEMPLATE:
 "${this.props.identity.promptTemplate}"
 
 INSTRUCTIONS:
@@ -344,14 +362,17 @@ INSTRUCTIONS:
    - %%task%% = the specific single task for the worker
    - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
    - %%goal%% = what the worker should achieve with this tool
-4. Provide any additional context or information that may help the worker complete the task and your mission.
+   - %%context%% = CRITICAL: Include relevant data/results from previous steps that the worker needs to complete this task
+4. Extract any data, reports, or information from conversation history that the worker will need
+5. Make the worker feel like they're collaborating with you, not starting fresh each time
 
 CONSTRAINTS:
 - ONE tool call only
 - Do NOT repeat completed actions
+- Provide rich context so worker has all information needed
 - Be specific about tool parameters needed
 
-Generate the worker prompt using the template format.
+Generate the worker prompt using the template format with ALL variables filled in.
 `;
 
     smithMemory.push({

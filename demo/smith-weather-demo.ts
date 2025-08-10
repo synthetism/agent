@@ -25,7 +25,7 @@ async function runSmithWeatherDemo() {
     // Step 1: Load API keys
     console.log('🔑 Loading API keys...');
     const openaiConfig = JSON.parse(
-      readFileSync(path.join('private', 'openai.json'), 'utf-8')
+      readFileSync(path.join('private', 'deepseek.json'), 'utf-8')
     );
     const weatherConfig = JSON.parse(
       readFileSync(path.join('private', 'openweather.json'), 'utf-8')
@@ -76,9 +76,9 @@ async function runSmithWeatherDemo() {
 
     // Step 4: Create AI operator and teach it tools
     console.log('🤖 Creating AI operator...');
-    const ai = AI.openai({
+    const ai = AI.deepseek({
       apiKey: openaiConfig.apiKey,
-      model: 'gpt-4o-mini'
+      model: 'deepseek-chat'
     });
     console.log('✅ AI operator created');
     
