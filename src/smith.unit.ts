@@ -253,24 +253,15 @@ export class Smith extends Unit<SmithProps> {
   // =============================================================================
 
   /**
-   * Render template and execute with AI (like generic agent)
+   * Render template with variables (do one thing well)
    */
-  private async renderAndExecute(templateName: 'taskBreakdown' | 'workerPromptGeneration', variables: TemplateVariables): Promise<string> {
+  private renderTemplate(templateName: 'taskBreakdown' | 'workerPromptGeneration', variables: TemplateVariables): string {
     if (!this.props.templateInstructions?.templates?.[templateName]) {
       throw new Error(`Template '${templateName}' not found in template instructions`);
     }
     
     const template = this.props.templateInstructions.templates[templateName];
-    const renderedPrompt = SimpleTemplateEngine.render(template.prompt, variables);
-
-    //console.log(`[${this.dna.id}] Rendered Prompt:\n ${renderedPrompt}`);
-
-    const response = await this.props.ai.chat([
-      { role: 'system', content: template.prompt.system },
-      { role: 'user', content: renderedPrompt }
-    ]);
-    
-    return response.content;
+    return SimpleTemplateEngine.render(template.prompt, variables);
   }
 
   // =============================================================================
@@ -324,10 +315,23 @@ export class Smith extends Unit<SmithProps> {
         execution.iterations++;
         console.log(`[Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
-        // Generate next specific prompt using template
-        const workerPrompt = await this.renderAndExecute('workerPromptGeneration', {            
-             promptTemplate: this.props.identity.promptTemplate            
-         })
+        // Generate next specific prompt using template and full memory context
+        const promptTemplate = this.renderTemplate('workerPromptGeneration', {
+                promptTemplate: this.props.identity.promptTemplate
+        })
+           
+        // Add the prompt generation request to Smith's memory
+        smithMemory.push({
+          role: 'user',
+          content: promptTemplate
+        });
+
+        // Smith uses his AI with full memory context to generate the prompt
+        const promptResponse = await this.props.ai.chat(smithMemory);
+        const workerPrompt = promptResponse.content;
+        
+        // Remove the prompt generation request from memory (Smith's internal thinking)
+        smithMemory.pop();
         
         console.log(`[Smith] Generated worker prompt: ${workerPrompt}`);
         
@@ -405,38 +409,41 @@ export class Smith extends Unit<SmithProps> {
    */
   private async getTaskBreakdown(task: string): Promise<string> {
     // Use template if available, otherwise fallback to hardcoded method
+    if (this.props.templateInstructions?.templates?.taskBreakdown) {
+      console.log('🎯 Using template-driven task breakdown');
+      
+      const renderedPrompt = this.renderTemplate('taskBreakdown', {
+        task,
+        availableTools: this.props.learnedTools.join(', ') || 'No tools available',
+      });
 
-    console.log('🎯 Using template-driven task breakdown');
-    const result = this.renderAndExecute('taskBreakdown', {
-      task,
-      availableTools: this.props.learnedTools.join(', ') || 'No tools available',
-    });
+      const response = await this.props.ai.chat([
+        { role: 'system', content: this.props.templateInstructions.templates.taskBreakdown.prompt.system },
+        { role: 'user', content: renderedPrompt }
+      ]);
 
+      return response.content;
+    }
 
-    return result;
-   
-    
-  /*   // Fallback to original hardcoded method
+    // Fallback to original hardcoded method
     console.log('📝 Using hardcoded task breakdown (fallback)');
     const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
     
-    const breakdownPrompt = `.
-
-YOUR MISSION: ${task}
+    const breakdownPrompt = `YOUR MISSION: ${task}
 AVAILABLE TOOLS (ALL AVAILABLE TO WORKERS): ${availableTools}
 USE PROMPT INSTRUCTIONS TO DIRECT AI WORKER: "${this.props.identity.promptTemplate}"
 FORMAT: Use plain text prompts, don't use markdown, unless required by the task. 
 
 Break this mission down into discrete, executable steps. Each step should use ONE specific tool. Use only tools that are listed. 
 
-Respond with a numbered breakdown and follow your plan to accomplis the mission.`;
+Respond with a numbered breakdown and follow your plan to accomplish the mission.`;
 
     const response = await this.props.ai.chat([
       { role: 'system', content: this.props.identity.systemPrompt },
       { role: 'user', content: breakdownPrompt }
     ]);
 
-    return response.content; */
+    return response.content;
   }
 
   /**

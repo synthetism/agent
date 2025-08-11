@@ -157,8 +157,8 @@ export class WeatherUnit extends Unit<WeatherProps> {
         return this.getCurrentWeather(params.location, params.units);
       },
       getForecast: (...args: unknown[]) => {
-        const params = args[0] as { location: string; days?: number };
-        return this.getForecast(params.location, params.days);
+        const params = args[0] as { latitude: number; longitude: number; units?: 'metric' | 'imperial' | 'kelvin' };
+        return this.getForecast(params.latitude, params.longitude, params.units);
       },
       getWeatherByCoords: (...args: unknown[]) => {
         const params = args[0] as { latitude: number; longitude: number; units?: 'metric' | 'imperial' | 'kelvin' };
@@ -197,16 +197,16 @@ export class WeatherUnit extends Unit<WeatherProps> {
         parameters: {
           type: 'object',
           properties: {
-            location: {
-              type: 'string',
-              description: 'City name, e.g., "London", "New York", "Tokyo"'
-            },
-            days: {
+            latitude: {
               type: 'number',
-              description: 'Number of forecast days (1-5)'
+              description: 'Latitude coordinate'
+            },
+            longitude: {
+              type: 'number',
+              description: 'Longitude coordinate'
             }
           },
-          required: ['location', 'days']
+          required: ['latitude', 'longitude']
         },
         response: { type: 'object', properties: { location: { type: 'string', description: 'Location name' }, forecasts: { type: 'array', description: 'Array of forecast data' } } }
       },
@@ -235,12 +235,12 @@ export class WeatherUnit extends Unit<WeatherProps> {
         parameters: {
           type: 'object',
           properties: {
-            q: {
+            query: {
               type: 'string',
               description: 'Location search query'
             }
           },
-          required: ['q']
+          required: ['query']
         },
         response: { type: 'array', properties: { name: { type: 'string', description: 'Location name' }, lat: { type: 'number', description: 'Latitude' } } }
       }
@@ -355,23 +355,24 @@ Note: Without API key, returns realistic mock data for development.
     }
 
     try {
-      const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${this.props.apiKey}&units=${weatherUnits}`;
+      // STEP 1: Try direct weather API first (for exact city names)
+      let url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${this.props.apiKey}&units=${weatherUnits}&lang=en`;
       
+      console.log(url);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.props.timeout);
       
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: 'GET',
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
 
+
+      // Check final response
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`[WeatherUnit] Location "${location}" not found`);
-        }
-        throw new Error(`[WeatherUnit] Weather API error: ${response.status}`);
+        throw new Error(`[WeatherUnit] Weather API error: ${response.status} - ${await response.text()}`);
       }
 
       const data = await response.json() as OpenWeatherResponse;
@@ -387,23 +388,17 @@ Note: Without API key, returns realistic mock data for development.
   /**
    * Get weather forecast for a location
    */
-  async getForecast(location: string, days = 5): Promise<ForecastData> {
-    if (!location || typeof location !== 'string') {
-      throw new Error('[WeatherUnit] Location is required');
+  async getForecast(lat: number, lon: number, units?: 'metric' | 'imperial' | 'kelvin'): Promise<ForecastData> {
+    if (typeof lat !== 'number' || typeof lon !== 'number') {
+      throw new Error('[WeatherUnit] Valid latitude and longitude are required');
     }
 
-    if (days < 1 || days > 5) {
-      throw new Error('[WeatherUnit] Forecast days must be between 1 and 5');
-    }
 
-    // If no API key, return mock data
-    if (!this.props.apiKey) {
-      return this.getMockForecast(location, days);
-    }
+
 
     try {
-      const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(location)}&appid=${this.props.apiKey}&units=${this.props.defaultUnits}`;
-      
+      const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${this.props.apiKey}&units=${units || this.props.defaultUnits}&limit=3`;
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.props.timeout);
       
@@ -492,7 +487,7 @@ Note: Without API key, returns realistic mock data for development.
     }
 
     try {
-      const url = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=5&appid=${this.props.apiKey}`;
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(query)}&limit=5&appid=${this.props.apiKey}`;
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.props.timeout);
