@@ -18,6 +18,47 @@ import type { AIResponse, ChatMessage } from '@synet/ai';
 import { AIOperator } from '@synet/ai';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { AgentInstructions } from "./types/agent.types"
+
+// Simple template types for Smith
+interface TemplateVariables {
+  task?: string;
+  availableTools?: string;
+  promptTemplate?: string;
+}
+
+
+/* 
+// Import the proper type
+interface AgentInstructions {
+  name: string;
+  description: string;
+  version: string;
+  templates: {
+    taskBreakdown: {
+      prompt: { user: string; system: string };
+      variables: string[];
+    };
+    workerPromptGeneration: {
+      prompt: { user: string; system: string };
+      variables: string[];
+    };
+  };
+} */
+
+class SimpleTemplateEngine {
+  static render(template: { user: string; system: string }, variables: TemplateVariables): string {
+    let rendered = template.user;
+    
+    // Replace simple variables {{variableName}}
+    rendered = rendered.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      const value = variables[varName as keyof TemplateVariables];
+      return value !== undefined ? String(value) : match;
+    });
+    
+    return rendered.trim();
+  }
+}
 
 const VERSION = '1.0.0';
 
@@ -49,6 +90,7 @@ interface SmithConfig {
   ai: AIOperator;
   identityPath?: string;
   maxIterations?: number;
+  templateInstructions: AgentInstructions; // Parsed template object, not file path
 }
 
 interface SmithProps extends UnitProps {
@@ -57,6 +99,7 @@ interface SmithProps extends UnitProps {
   maxIterations: number;
   learnedTools: string[];
   fsEventMemory: string[]; // Store filesystem events for awareness
+  templateInstructions: AgentInstructions; // Parsed template object
 }
 
 interface SmithExecution {
@@ -111,6 +154,7 @@ export class Smith extends Unit<SmithProps> {
     const identityPath = config.identityPath || path.join(__dirname, '..', 'config', 'smith.json');
     const identity: SmithIdentity = JSON.parse(readFileSync(identityPath, 'utf-8'));
 
+    // No file parsing here - template instructions come pre-parsed from outside
     const props: SmithProps = {
       dna: createUnitSchema({
         id: 'smith',
@@ -120,7 +164,8 @@ export class Smith extends Unit<SmithProps> {
       identity,
       maxIterations: config.maxIterations || 10,
       learnedTools: [],
-      fsEventMemory: [] // Initialize filesystem event memory
+      fsEventMemory: [], // Initialize filesystem event memory
+      templateInstructions: config.templateInstructions // Pre-parsed object
     };
 
     return new Smith(props);
@@ -203,6 +248,31 @@ export class Smith extends Unit<SmithProps> {
   }
 
   // =============================================================================
+  // TEMPLATE SYSTEM (Template-driven prompts)
+  // =============================================================================
+
+  /**
+   * Render template and execute with AI (like generic agent)
+   */
+  private async renderAndExecute(templateName: 'taskBreakdown' | 'workerPromptGeneration', variables: TemplateVariables): Promise<string> {
+    if (!this.props.templateInstructions?.templates?.[templateName]) {
+      throw new Error(`Template '${templateName}' not found in template instructions`);
+    }
+    
+    const template = this.props.templateInstructions.templates[templateName];
+    const renderedPrompt = SimpleTemplateEngine.render(template.prompt, variables);
+
+    console.log(`[${this.dna.id}] Rendered Prompt:\n ${renderedPrompt}`);
+
+    const response = await this.props.ai.chat([
+      { role: 'system', content: template.prompt.system },
+      { role: 'user', content: renderedPrompt }
+    ]);
+    
+    return response.content;
+  }
+
+  // =============================================================================
   // CORE EXECUTION
   // =============================================================================
 
@@ -242,7 +312,7 @@ export class Smith extends Unit<SmithProps> {
       
       smithMemory.push({
         role: 'user',
-        content: `MISSION: ${task}`
+        content: task
       }, {
         role: 'assistant', 
         content: taskBreakdown
@@ -253,10 +323,13 @@ export class Smith extends Unit<SmithProps> {
         execution.iterations++;
         console.log(`[Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
-        // Generate next specific prompt
-        const workerPrompt = await this.generateNextWorkerPrompt(smithMemory, task);
+        // Generate next specific prompt using template
+        const workerPrompt = await this.renderAndExecute('workerPromptGeneration', {            
+             promptTemplate: this.props.identity.promptTemplate            
+         })
+        
         console.log(`[Smith] Generated worker prompt: ${workerPrompt}`);
-
+        
         // Add prompt to worker memory
         workerMemory.push({
           role: 'user',
@@ -330,6 +403,20 @@ export class Smith extends Unit<SmithProps> {
    * Entry call - Smith breaks down mission into discrete steps
    */
   private async getTaskBreakdown(task: string): Promise<string> {
+    // Use template if available, otherwise fallback to hardcoded method
+
+    console.log('🎯 Using template-driven task breakdown');
+    const result = this.renderAndExecute('taskBreakdown', {
+      task,
+      availableTools: this.props.learnedTools.join(', ') || 'No tools available',
+    });
+
+
+    return result;
+   
+    
+  /*   // Fallback to original hardcoded method
+    console.log('📝 Using hardcoded task breakdown (fallback)');
     const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
     
     const breakdownPrompt = `.
@@ -348,7 +435,7 @@ Respond with a numbered breakdown and follow your plan to accomplis the mission.
       { role: 'user', content: breakdownPrompt }
     ]);
 
-    return response.content;
+    return response.content; */
   }
 
   /**
@@ -436,7 +523,7 @@ Generate ONLY a text summary report. Do not use any tools during this final repo
   private async generateNextWorkerPrompt(smithMemory: ChatMessage[], originalTask: string): Promise<string> {
   
     // Get current filesystem event context
-    const fsContext = this.getFileSystemContext();
+    //const fsContext = this.getFileSystemContext();
     
     // Smith asks his AI to structure the prompt using the template
     const promptGenerationRequest = `
@@ -445,8 +532,6 @@ Your goal is to generate the next prompt for your AI assistant.
 Use following prompt as a guidance:
 "${this.props.identity.promptTemplate}"
 
-FILESYSTEM OPERATIONS AWARENESS:
-${fsContext}
 
 INSTRUCTIONS:
 1. Analyze what has been completed vs what still needs to be done

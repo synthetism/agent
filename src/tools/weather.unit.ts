@@ -235,12 +235,12 @@ export class WeatherUnit extends Unit<WeatherProps> {
         parameters: {
           type: 'object',
           properties: {
-            query: {
+            q: {
               type: 'string',
               description: 'Location search query'
             }
           },
-          required: ['query']
+          required: ['q']
         },
         response: { type: 'array', properties: { name: { type: 'string', description: 'Location name' }, lat: { type: 'number', description: 'Latitude' } } }
       }
