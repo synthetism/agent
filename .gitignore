@@ -7,3 +7,4 @@ private/*.json
 tmp
 docs
 vault
+config/*.json

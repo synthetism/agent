@@ -21,8 +21,8 @@ async function runSmithWeatherDemo() {
   console.log('🕶️  Agent Smith Weather Demo');
   console.log('===============================\n');
   
-  const provider = 'anthropic';
-  const model = 'claude-sonnet-4-20250514';
+  const provider = 'mistral';
+  const model = 'mistral-large-latest';
 
   try {
     // Step 1: Load API keys
@@ -94,15 +94,20 @@ async function runSmithWeatherDemo() {
 
     // Step 5: Create Agent Smith with tool-trained AI
     console.log('🕶️  Creating Agent Smith...');
-    const smith = Smith.create({ ai });
+    const smith = Smith.create({ ai, maxIterations:20 });
     console.log('✅', smith.whoami());
+    
+    // Step 6: Subscribe Smith to filesystem events for operational awareness
+    console.log('🔗 Connecting Smith to filesystem event stream...');
+    smith.subscribeToFileSystemEvents(eventEmitter);
+    console.log('✅ Smith is now filesystem-aware\n');
     
     console.log('🧠 Teaching Smith tools (for context)...');
     smith.learn([weather.teach(), fs.teach()]);
     console.log('✅', smith.whoami());
     console.log();
 
-    // Step 7: Smith creative beach destination mission
+    // Step 7: Smith creative beach destination mission with filesystem awareness
     console.log('�️  Executing Smith creative beach destination mission...\n');
     
     const mission = `
@@ -114,7 +119,7 @@ Task:
 You are a luxury travel intelligence analyst. Your mission is to discover and recommend the perfect beach destination for immediate travel based on current weather conditions and regional attractions.
 
 Requirements:
-1. Research weather conditions for 3-4 diverse coastal locations worldwide (choose strategically from different regions/hemispheres)
+1. Research weather conditions in diverse coastal locations worldwide (choose strategically from different regions/hemispheres) and find best destinations for travel for wealthy individuals.
 2. Analyze current weather patterns to identify optimal beach conditions (temperature, precipitation, wind, visibility)
 3. Consider seasonal factors and local attractions/activities available 
 4. Generate a comprehensive travel intelligence report with your expert recommendation
@@ -135,7 +140,7 @@ Think like a luxury travel consultant with access to real-time weather intellige
     console.log('==================');
     console.log(`Goal: Ultimate Beach Destination Intelligence`);
     console.log(`Completed: ${result.completed}`);
-    console.log(`Iterations: ${result.iterations}`);
+    console.log(`Iterations: ${result.iterations}`);``
     console.log(`Messages: ${result.messages.length}`);
     
     if (result.completed) {

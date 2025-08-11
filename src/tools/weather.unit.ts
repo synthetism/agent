@@ -161,8 +161,8 @@ export class WeatherUnit extends Unit<WeatherProps> {
         return this.getForecast(params.location, params.days);
       },
       getWeatherByCoords: (...args: unknown[]) => {
-        const params = args[0] as { lat: number; lon: number; units?: 'metric' | 'imperial' | 'kelvin' };
-        return this.getWeatherByCoords(params.lat, params.lon, params.units);
+        const params = args[0] as { latitude: number; longitude: number; units?: 'metric' | 'imperial' | 'kelvin' };
+        return this.getWeatherByCoords(params.latitude, params.longitude, params.units);
       },
       searchLocation: (...args: unknown[]) => {
         const params = args[0] as { query: string };

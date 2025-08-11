@@ -56,6 +56,7 @@ interface SmithProps extends UnitProps {
   identity: SmithIdentity;
   maxIterations: number;
   learnedTools: string[];
+  fsEventMemory: string[]; // Store filesystem events for awareness
 }
 
 interface SmithExecution {
@@ -118,10 +119,87 @@ export class Smith extends Unit<SmithProps> {
       ai: config.ai,
       identity,
       maxIterations: config.maxIterations || 10,
-      learnedTools: []
+      learnedTools: [],
+      fsEventMemory: [] // Initialize filesystem event memory
     };
 
     return new Smith(props);
+  }
+
+  // =============================================================================
+  // FILESYSTEM EVENT AWARENESS
+  // =============================================================================
+
+  /**
+   * Subscribe to filesystem events to maintain awareness of operations
+   */
+  subscribeToFileSystemEvents(eventEmitter: any): void {
+    console.log(`🕶️  [${this.dna.id}] Subscribing to filesystem events for operational awareness...`);
+    
+    // Subscribe to file write events
+    eventEmitter.subscribe('file.write', {
+      update: (event: any) => {
+        const { type, data } = event;
+        const eventLog = data.error 
+          ? `❌ FS-ERROR: ${data.operation} failed on ${data.filePath} - ${data.error.message}`
+          : `✅ FS-SUCCESS: ${data.operation} completed on ${data.filePath} (${data.result} bytes)`;
+        
+        // Add to Smith's filesystem event memory
+        this.props.fsEventMemory.push(eventLog);
+        
+        // Keep only last 10 events to avoid memory bloat
+        if (this.props.fsEventMemory.length > 10) {
+          this.props.fsEventMemory = this.props.fsEventMemory.slice(-10);
+        }
+        
+        console.log(`🧠 [${this.dna.id}] Filesystem Event Recorded: ${eventLog}`);
+      }
+    });
+
+    // Subscribe to other filesystem events if needed
+    eventEmitter.subscribe('file.read', {
+      update: (event: any) => {
+        const { type, data } = event;
+        const eventLog = data.error 
+          ? `❌ FS-ERROR: read failed on ${data.filePath} - ${data.error.message}`
+          : `📖 FS-READ: successfully read ${data.filePath}`;
+        
+        this.props.fsEventMemory.push(eventLog);
+        if (this.props.fsEventMemory.length > 10) {
+          this.props.fsEventMemory = this.props.fsEventMemory.slice(-10);
+        }
+      }
+    });
+  }
+
+  /**
+   * Get current filesystem event context for worker prompts
+   */
+  getFileSystemContext(): string {
+    if (this.props.fsEventMemory.length === 0) {
+      return "No filesystem operations detected yet.";
+    }
+    
+    return `Recent filesystem operations:\n${this.props.fsEventMemory.join('\n')}`;
+  }
+
+  /**
+   * Check for recent filesystem errors that need immediate attention
+   */
+  hasRecentFileSystemErrors(): boolean {
+    return this.props.fsEventMemory.some(event => event.includes('❌ FS-ERROR'));
+  }
+
+  /**
+   * Get the most recent filesystem error for analysis
+   */
+  getLastFileSystemError(): string | null {
+    for (let i = this.props.fsEventMemory.length - 1; i >= 0; i--) {
+      if (this.props.fsEventMemory[i].includes('❌ FS-ERROR')) {
+        return this.props.fsEventMemory[i];
+      }
+    }
+    return null;
   }
 
   // =============================================================================
@@ -277,19 +355,33 @@ Respond with a numbered breakdown and follow your plan to accomplis the mission.
    * Analyze result - determine if step completed or next task needed
    */
   private async analyzeResult(smithMemory: ChatMessage[], response: string): Promise<'completed' | 'next_task'> {
+    // Check for filesystem errors first
+    const fsContext = this.getFileSystemContext();
+    const hasErrors = this.hasRecentFileSystemErrors();
+    const lastError = this.getLastFileSystemError();
+    
     const analysisPrompt = `Analyze the worker AI response and determine mission status.
 
 WORKER AI RESPONSE: ${response}
 
+FILESYSTEM OPERATIONS STATUS:
+${fsContext}
+
+${hasErrors ? `⚠️ CRITICAL: Recent filesystem error detected: ${lastError}` : ''}
+
 Based on the response above and the conversation history, determine:
 - Is the ENTIRE mission completed successfully? 
 - Or should we continue with the next task?
+- Are there any filesystem operation failures that need to be addressed?
+
+${hasErrors ? 'NOTE: If there are filesystem errors, the mission is NOT completed regardless of what the worker claims.' : ''}
 
 Check for completion signals like "MISSION_COMPLETE", successful file saves, or mission objectives achieved.
+IMPORTANT: Verify actual filesystem operation success, not just worker claims.
 
 Respond with ONLY one word:
-- "completed" if the entire mission is finished
-- "next_task" if we should continue with the next step`;
+- "completed" if the entire mission is finished AND no filesystem errors exist
+- "next_task" if we should continue with the next step OR if filesystem errors need fixing`;
 
     smithMemory.push({
       role: 'user',
@@ -322,9 +414,13 @@ MISSION SUMMARY:
 - Final Result: [what was achieved]
 - Status: Mission Complete
 
-If you have access to tools that could enhance this report, feel free to use them.`;
+Generate ONLY a text summary report. Do not use any tools during this final report generation.`;
 
-    const response = await this.props.ai.call(finalReportPrompt, { useTools: true });
+    // Use chat instead of call to avoid tool execution during final report
+    const response = await this.props.ai.chat([
+      { role: 'system', content: 'You are generating a final mission summary report. Do not use tools.' },
+      { role: 'user', content: finalReportPrompt }
+    ]);
     return response.content;
   }
 
@@ -339,6 +435,9 @@ If you have access to tools that could enhance this report, feel free to use the
    */
   private async generateNextWorkerPrompt(smithMemory: ChatMessage[], originalTask: string): Promise<string> {
   
+    // Get current filesystem event context
+    const fsContext = this.getFileSystemContext();
+    
     // Smith asks his AI to structure the prompt using the template
     const promptGenerationRequest = `
 Your goal is to generate the next prompt for your AI assistant. 
@@ -346,20 +445,26 @@ Your goal is to generate the next prompt for your AI assistant.
 Use following prompt as a guidance:
 "${this.props.identity.promptTemplate}"
 
+FILESYSTEM OPERATIONS AWARENESS:
+${fsContext}
+
 INSTRUCTIONS:
 1. Analyze what has been completed vs what still needs to be done
-2. Identify the NEXT SINGLE TOOL that needs to be used
-3. Use the template above, filling in:
+2. You will receive events related to filesystem operations, in case of failure, instruct assistant to correct the arguments.
+3. Identify the NEXT SINGLE TOOL that needs to be used
+4. Use the template above, filling in:
    - %%task%% = the specific single task for the worker
    - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
    - %%goal%% = what the worker should achieve with this tool
+   - %%context%% = include filesystem operation context if relevant
  
 CONSTRAINTS:
 - ONE tool call only. Some tools can be executed concurrently if instructed, but default in sequential.
-- Do NOT repeat completed actions
-- Provide context so worker follows the workflow.
+- Do NOT repeat completed actions (check filesystem events for success/failures)
+- Provide context so worker follows the workflow, including any filesystem operation results
 - Be specific about tool parameters needed and provide instructions.
-- Use only tools from the list provided. 
+- Use only tools from the list provided.
+- If filesystem errors occurred, address them in the next task
 
 Generate the worker prompt using the template format with ALL variables filled in.
 `;
