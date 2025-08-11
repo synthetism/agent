@@ -72,6 +72,7 @@ interface SmithIdentity {
   objective: string;
   promptTemplate: string;
   systemPrompt: string;
+  workerPrompt: string;
   missionStrategy: {
     analysis: string;
     toolSelection: string;
@@ -262,7 +263,7 @@ export class Smith extends Unit<SmithProps> {
     const template = this.props.templateInstructions.templates[templateName];
     const renderedPrompt = SimpleTemplateEngine.render(template.prompt, variables);
 
-    console.log(`[${this.dna.id}] Rendered Prompt:\n ${renderedPrompt}`);
+    //console.log(`[${this.dna.id}] Rendered Prompt:\n ${renderedPrompt}`);
 
     const response = await this.props.ai.chat([
       { role: 'system', content: template.prompt.system },
@@ -301,7 +302,7 @@ export class Smith extends Unit<SmithProps> {
 
     // Worker's memory for collaborative work within mission
     const workerMemory: ChatMessage[] = [
-      { role: 'system', content: 'You are an AI worker collaborating on a mission. You have access to tools and can see the history of our work together.' }
+      { role: 'system', content: this.props.identity.workerPrompt }
     ];
 
     try {

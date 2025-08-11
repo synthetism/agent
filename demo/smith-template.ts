@@ -22,8 +22,8 @@ async function runSmithWeatherDemo() {
   console.log('🕶️  Agent Smith Weather Demo');
   console.log('===============================\n');
   
-  const provider = 'mistral';
-  const model = 'mistral-medium-latest';
+  const provider = 'deepseek';
+  const model = 'deepseek-chat';
 
   try {
     // Step 1: Load API keys and template instructions
