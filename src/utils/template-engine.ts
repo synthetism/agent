@@ -1,16 +1,15 @@
 /**
- * Template Engine for Generic Agent
- * Handles variable replacement and validation
- * Part of AI-FS safety demonstration
+ * Simple Template Engine for Generic Agent
+ * Focus: Basic variable replacement for template-based prompts
  */
 
-import { TemplateEngine, TemplateVariables, ValidationResult } from '../types/agent.types.js';
+import { TemplateVariables } from '../types/agent.types.js';
 
-export class SimpleTemplateEngine implements TemplateEngine {
+export class SimpleTemplateEngine {
   
   /**
-   * Render template with variable replacement
-   * Supports {{variable}} syntax and {{#condition}}content{{/condition}}
+   * Render template with basic variable replacement
+   * Supports {{variable}} syntax only - keep it simple
    */
   render(template: string, variables: TemplateVariables): string {
     let rendered = template;
@@ -21,108 +20,18 @@ export class SimpleTemplateEngine implements TemplateEngine {
       return value !== undefined ? String(value) : match;
     });
     
-    // Handle conditional blocks {{#condition}}content{{/condition}}
-    rendered = rendered.replace(/\{\{#(\w+)\}\}(.*?)\{\{\/\1\}\}/gs, (match, condition, content) => {
-      const value = variables[condition as keyof TemplateVariables];
-      return value ? content : '';
-    });
-    
-    // Remove comments {{! comment }}
-    rendered = rendered.replace(/\{\{!.*?\}\}/g, '');
-    
     return rendered.trim();
   }
   
   /**
-   * Validate template has all required variables
-   */
-  validate(template: string, requiredVariables: string[]): boolean {
-    const result = this.validateDetailed(template, requiredVariables);
-    return result.valid;
-  }
-  
-  /**
-   * Detailed validation with error reporting
-   */
-  validateDetailed(template: string, requiredVariables: string[]): ValidationResult {
-    const extractedVars = this.extractVariables(template);
-    const missingVariables = requiredVariables.filter(req => !extractedVars.includes(req));
-    
-    const errors: string[] = [];
-    const invalidSyntax: string[] = [];
-    
-    // Check for unmatched brackets
-    const openBrackets = (template.match(/\{\{/g) || []).length;
-    const closeBrackets = (template.match(/\}\}/g) || []).length;
-    
-    if (openBrackets !== closeBrackets) {
-      invalidSyntax.push('Unmatched template brackets');
-    }
-    
-    // Check for unclosed conditional blocks
-    const conditionalOpens = (template.match(/\{\{#\w+\}\}/g) || []).length;
-    const conditionalCloses = (template.match(/\{\{\/\w+\}\}/g) || []).length;
-    
-    if (conditionalOpens !== conditionalCloses) {
-      invalidSyntax.push('Unclosed conditional blocks');
-    }
-    
-    if (missingVariables.length > 0) {
-      errors.push(`Missing required variables: ${missingVariables.join(', ')}`);
-    }
-    
-    if (invalidSyntax.length > 0) {
-      errors.push(`Syntax errors: ${invalidSyntax.join(', ')}`);
-    }
-    
-    return {
-      valid: missingVariables.length === 0 && invalidSyntax.length === 0,
-      missingVariables,
-      invalidSyntax,
-      errors
-    };
-  }
-  
-  /**
-   * Extract all variable names from template
-   */
-  extractVariables(template: string): string[] {
-    const variables = new Set<string>();
-    
-    // Extract simple variables {{variableName}}
-    const simpleMatches = template.match(/\{\{(\w+)\}\}/g);
-    if (simpleMatches) {
-      simpleMatches.forEach(match => {
-        const varName = match.replace(/\{\{|\}\}/g, '');
-        if (!varName.startsWith('#') && !varName.startsWith('/') && !varName.startsWith('!')) {
-          variables.add(varName);
-        }
-      });
-    }
-    
-    // Extract conditional variables {{#condition}}
-    const conditionalMatches = template.match(/\{\{#(\w+)\}\}/g);
-    if (conditionalMatches) {
-      conditionalMatches.forEach(match => {
-        const varName = match.replace(/\{\{#|\}\}/g, '');
-        variables.add(varName);
-      });
-    }
-    
-    return Array.from(variables);
-  }
-  
-  /**
-   * Create template context helper
+   * Create context with defaults
    */
   createContext(variables: Partial<TemplateVariables>): TemplateVariables {
     return {
       task: '',
       availableTools: '',
       promptTemplate: '',
-      filesystemContext: '',
-      hasErrors: false,
-      lastError: '',
+      eventContext: '',
       workerResponse: '',
       conversationHistory: '',
       ...variables
@@ -130,21 +39,17 @@ export class SimpleTemplateEngine implements TemplateEngine {
   }
   
   /**
-   * Format filesystem context for templates
+   * Format event context for templates
    */
-  static formatFilesystemContext(events: any[], hasErrors: boolean, lastError: string | null): string {
+  static formatEventContext(events: any[]): string {
     if (events.length === 0) {
-      return 'No recent filesystem operations.';
+      return 'No recent events.';
     }
     
-    const recentEvents = events.slice(-5); // Last 5 operations
-    const context = recentEvents.map(event => 
-      event.success 
-        ? `✅ ${event.operation} completed: ${event.path}`
-        : `❌ ${event.operation} failed: ${event.path} - ${event.error}`
+    const recentEvents = events.slice(-5); // Last 5 events
+    return recentEvents.map(event => 
+      `[${event.timestamp.toISOString()}] ${event.type}: ${JSON.stringify(event.data)}`
     ).join('\n');
-    
-    return `Recent operations (${events.length}):\n${context}`;
   }
   
   /**
