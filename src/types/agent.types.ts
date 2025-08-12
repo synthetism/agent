@@ -19,7 +19,8 @@ export interface AgentTemplate {
 // Simple template variables - only what we actually use
 export interface TemplateVariables {
   task?: string;
-  availableTools?: string;
+  tools?: string;
+  schemas?: string;
   promptTemplate?: string;
   systemEvents?: string;
   workerResponse?: string;

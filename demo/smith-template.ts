@@ -30,11 +30,18 @@ async function runSmithWeatherDemo() {
   const provider = 'deepseek';
   const model = 'deepseek-chat';
 
+  const agent_provider = 'deepseek';
+  const agent_model = 'deepseek-chat';
+
   try {
     // Step 1: Load API keys and template instructions
     console.log('🔑 Loading API keys and templates...');
     const aiconfig = JSON.parse(
       readFileSync(path.join('private', `${provider}.json`), 'utf-8')
+    );
+
+    const agentconfig = JSON.parse(
+      readFileSync(path.join('private', `${agent_provider}.json`), 'utf-8')
     );
     const weatherConfig = JSON.parse(
       readFileSync(path.join('private', 'openweather.json'), 'utf-8')
@@ -49,11 +56,11 @@ async function runSmithWeatherDemo() {
 
     // Step 2: Create tools first
     console.log('🛠️  Creating tools...');
-   /*  const weather = WeatherUnit.create({
+     const weather = WeatherUnit.create({
       apiKey: weatherConfig.apiKey
-    }); */
+    }); 
 
-    const openweather  = new OpenWeather2({ 
+   /*  const openweather  = new OpenWeather2({ 
       apiKey:weatherConfig.apiKey,
       timeout: 10000 
     });
@@ -62,7 +69,7 @@ async function runSmithWeatherDemo() {
     const weather = Weather.create({
       provider:openweather,
       defaultUnits: 'metric'
-    });
+    }); */
 
         // Enable hasher for cryptographic operations - now using Unit Architecture v1.0.8!
     const hasher = Hasher.create();
@@ -115,6 +122,14 @@ async function runSmithWeatherDemo() {
           model: model,
         },
       });
+
+      const agent = AIOperator.create({
+        type: agent_provider,
+        options: {
+          apiKey: agentconfig.apiKey,
+          model: agent_model,
+        },
+     });
     console.log('✅ AI operator created');
     
     console.log('🧠 Teaching AI the tools...');
@@ -126,11 +141,12 @@ async function runSmithWeatherDemo() {
     console.log('✅ AI learned tools\n');
     console.log('Available capabilities:', ai.capabilities().list());
 
-    process.exit(1);
+    //process.exit(1);
     // Step 5: Create Agent Smith with parsed template instructions
     console.log('🕶️  Creating Agent Smith with template support...');
     const smith = Smith.create({ 
       ai, 
+      agent,
       maxIterations: 20,
       templateInstructions // Pass pre-parsed template object
     });
@@ -156,20 +172,19 @@ async function runSmithWeatherDemo() {
 
 Task: 
 
-You are a luxury travel intelligence analyst. Your mission is to discover and recommend the perfect beach destination for immediate travel based on current weather conditions and regional attractions.
+You are a luxury travel intelligence analyst. Your mission is to determine location with the best weather experience and provide deliver weather report.
 
 Requirements:
-1. Research weather conditions in diverse coastal locations worldwide (choose strategically from different regions/hemispheres) and find best destinations for travel for wealthy individuals.
-2. Analyze current weather patterns to identify optimal beach conditions (temperature, precipitation, wind, visibility)
-3. Consider seasonal factors and local attractions/activities available 
-4. Generate a comprehensive travel intelligence report with your expert recommendation
-5. Save the complete analysis and recommendation to 'vault/beach-destination-intelligence.md' in professional markdown format
+1. Research weather conditions in diverse coastal locations worldwide. Choose strategically from different regions/hemispheres, but no more than 3 destinations, and find best destinations for travel for wealthy AI entities.
+2. Analyze current weather patterns to identify optimal beach conditions (temperature, wind, visibility)
+3. Generate a comprehensive travel intelligence report with your expert recommendation
+4. Save the complete analysis and recommendation to 'vault/beach-destination-intelligence.md' in professional markdown format
 
 Success Criteria:
 - Weather data from multiple global coastal destinations
 - Strategic analysis of optimal beach conditions
 - Expert travel recommendation with reasoning
-- Professional intelligence-grade report with actionable insights
+- File is saved and contents is present
 
 Think like a luxury travel consultant with access to real-time weather intelligence. Make this recommendation count!
 `;

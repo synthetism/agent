@@ -12,7 +12,7 @@
  */
 
 import { Unit, createUnitSchema, } from '@synet/unit';
-import type { Capabilities, Schema, Validator, UnitCore, UnitProps } from '@synet/unit';
+import type { Capabilities, Schema, Validator, UnitCore, UnitProps, TeachingContract } from '@synet/unit';
 import { Capabilities as CapabilitiesClass, Schema as SchemaClass, Validator as ValidatorClass } from '@synet/unit';
 import type { AIResponse, ChatMessage } from '@synet/ai';
 import type { AIOperator } from '@synet/ai';
@@ -86,16 +86,17 @@ interface SmithIdentity {
 
 interface SmithConfig {
   ai: AIOperator;
+  agent?: AIOperator
   identityPath?: string;
   maxIterations?: number;
   templateInstructions: AgentInstructions; // Parsed template object, not file path
 }
 
 interface SmithProps extends UnitProps {
+  agent: AIOperator;
   ai: AIOperator;
   identity: SmithIdentity;
   maxIterations: number;
-  learnedTools: string[];
   fsEventMemory: string[]; // Store filesystem events for awareness
   templateInstructions: AgentInstructions; // Parsed template object
 }
@@ -160,9 +161,9 @@ export class Smith extends Unit<SmithProps> {
         description: "AI Agent - Mission Orchestrator"
       },
       ai: config.ai,
+      agent: config.agent || config.ai,
       identity,
       maxIterations: config.maxIterations || 10,
-      learnedTools: [],
       fsEventMemory: [], // Initialize filesystem event memory
       templateInstructions: config.templateInstructions // Pre-parsed object
     };
@@ -221,10 +222,10 @@ export class Smith extends Unit<SmithProps> {
    */
   getFileSystemContext(): string {
     if (this.props.fsEventMemory.length === 0) {
-      return "No filesystem operations detected yet.";
+      return "No systems events.";
     }
     
-    return `Recent filesystem operations:\n${this.props.fsEventMemory.join('\n')}`;
+    return `Recent events:\n${this.props.fsEventMemory.join('\n')}`;
   }
 
   /**
@@ -245,6 +246,13 @@ export class Smith extends Unit<SmithProps> {
     }
     return null;
   }
+
+    getLastEvent(): string | null {
+  
+     return this.props.fsEventMemory[this.props.fsEventMemory.length - 1] || null;
+   
+ 
+   }
 
   // =============================================================================
   // TEMPLATE SYSTEM (Template-driven prompts)
@@ -313,22 +321,25 @@ export class Smith extends Unit<SmithProps> {
     try {
       // STEP 1: Entry call - get task breakdown
       console.log('[Smith] Breaking down mission into steps...');
-
-      const taskrompt = this.renderTemplate('taskBreakdown', {
+      console.log('Smith capabilities ', this.capabilities().list());
+      
+      const taskPrompt = this.renderTemplate('taskBreakdown', {
         task,
-        availableTools: this.props.learnedTools.join(', ') || 'No tools available',
+        tools: this.capabilities().list().join(', ') || 'No tools available',
+        schemas: JSON.stringify(this.schema().toJson()) || 'No schemas available',
       });
 
-      const taskBreakdown = await this.props.ai.chat([
+
+      const taskBreakdown = await this.props.agent.chat([
         { role: 'system', content: this.props.templateInstructions.templates.taskBreakdown.prompt.system },
-        { role: 'user', content: taskrompt }
+        { role: 'user', content: taskPrompt }
       ]);
 
-      console.log(`[Smith] Task breakdown:\n${taskBreakdown}`);
+      console.log(`[${this.props.dna.id}] Task breakdown:\n${taskBreakdown.content}`);
       
       smithMemory.push({
         role: 'user',
-        content: taskrompt
+        content: taskPrompt
       }, {
         role: 'assistant', 
         content: taskBreakdown.content
@@ -351,7 +362,7 @@ export class Smith extends Unit<SmithProps> {
         });
 
         // Smith uses his AI with full memory context to generate the prompt
-        const promptResponse = await this.props.ai.chat(smithMemory);
+        const promptResponse = await this.props.agent.chat(smithMemory);
         const workerPrompt = promptResponse.content;
         
         // Remove the prompt generation request from memory (Smith's internal thinking)
@@ -377,12 +388,17 @@ export class Smith extends Unit<SmithProps> {
 
         // Add to memory
         smithMemory.push({
-          role: 'user',
-          content: workerPrompt
+          role: 'assistant',
+          content: 'Worker task: ' + workerPrompt
         }, {
           role: 'assistant',
-          content: response.content
-        });
+          content: 'Worker response: ' + response.content
+        }); 
+
+         /* smithMemory.push({
+          role: 'assistant',
+          content: 'Worker tasked to execute: ' + workerPrompt
+        }); */
 
         // Track in execution
         execution.messages.push({
@@ -394,7 +410,30 @@ export class Smith extends Unit<SmithProps> {
         });
 
         // STEP 3: Analyze result
-        const analysisResult = await this.analyzeResult(smithMemory, response.content);
+        //const analysisResult = await this.analyzeResult(smithMemory, response.content);
+
+    const lastEvent = this.getLastEvent();
+    
+
+    const analysisPrompt = this.renderTemplate('resultAnalysis', {
+        workerResponse: response.content,
+        systemEvents: lastEvent || 'No events detected',
+    });
+  
+      smithMemory.push({
+        role: 'user',
+        content: analysisPrompt
+      });
+
+       const analysis = await this.props.agent.chat(smithMemory);
+
+       // Remove analysis request from memory
+       smithMemory.pop();
+      
+       const result = analysis.content.toLowerCase().trim();
+       const analysisResult =  result.includes('completed') ? 'completed' : 'next_task';
+ 
+
         console.log(`🔍 [Smith] Analysis: ${analysisResult}`);
         
         if (analysisResult === 'completed') {
@@ -434,12 +473,12 @@ export class Smith extends Unit<SmithProps> {
    */
   private async analyzeResult(smithMemory: ChatMessage[], response: string): Promise<'completed' | 'next_task'> {
     
-    const lastError = this.getLastFileSystemError();
+    const lastEvent = this.getLastEvent();
     
 
     const analysisPrompt = this.renderTemplate('resultAnalysis', {
         workerResponse: response,
-        systemEvents: lastError || 'No errors detected',
+        systemEvents: lastEvent || 'No events detected',
     });
   
     smithMemory.push({
@@ -537,15 +576,15 @@ Generate the worker prompt using the template format with ALL variables filled i
   /**
    * Smith learns tools from other units but doesn't teach (like @synet/ai)
    */
-  learn(contracts: Array<{ unitId: string; capabilities: Capabilities; schema: Schema; validator: Validator }>): void {
+  learn(contracts: TeachingContract[]): void {
     for (const contract of contracts) {
-      // Extract tool names from capabilities
-      const toolNames = contract.capabilities.list().map(cap => `${contract.unitId}.${cap}`);
-      this.props.learnedTools.push(...toolNames);
-      console.log(`🧠 [${this.props.identity.name}] Learned ${toolNames.length} tools from ${contract.unitId}: ${toolNames.join(', ')}`);
+
+      // Learn capabilities and schemas
+      this._unit.capabilities.learn([contract]);
+      this._unit.schema.learn([contract]);
+      this._unit.validator.learn([contract]);
     }
   }
-
   
   // =============================================================================
   // UNIT ARCHITECTURE METHODS
@@ -555,7 +594,7 @@ Generate the worker prompt using the template format with ALL variables filled i
    * Smith's identity
    */
   whoami(): string {
-    const tools = this.props.learnedTools.length;
+    const tools = this.capabilities().list().length;
     return `🕶️  ${this.props.identity.name} - ${this.props.identity.description} (${tools} tools available)`;
   }
 
@@ -580,7 +619,7 @@ METHODS:
   • learn(contracts) - Learn tools from other units  
   • whoami() - Show Smith's identity
 
-LEARNED TOOLS: ${this.props.learnedTools.join(', ') || 'None'}
+LEARNED TOOLS: ${this.capabilities().list().join(', ') || 'None'}
 
 COMPLETION SIGNALS: ${this.props.identity.completionSignals.join(', ')}
     `;
