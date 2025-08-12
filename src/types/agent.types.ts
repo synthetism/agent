@@ -4,7 +4,10 @@
  * No YAGNI interfaces - just what we need for the demo
  */
 
+export type Templates =   'taskBreakdown' | 'workerPromptGeneration' | 'resultAnalysis' | 'finalReport'
+
 // Simple template structure
+
 export interface AgentTemplate {
   prompt: { 
     user: string;
@@ -18,7 +21,7 @@ export interface TemplateVariables {
   task?: string;
   availableTools?: string;
   promptTemplate?: string;
-  eventContext?: string;
+  systemEvents?: string;
   workerResponse?: string;
   conversationHistory?: string;
 }
@@ -48,7 +51,7 @@ export interface AgentConfig {
 }
 
 // Simple generic event
-export interface AgentEvent<T = any> {
+export interface AgentEvent<T = unknown> {
   type: string;
   data: T;
   source: string;
@@ -60,7 +63,7 @@ export interface AgentResult {
   success: boolean;
   result: string;
   events: AgentEvent[];
-  conversationHistory: any[];
+  conversationHistory: ChatMessage[];
 }
 
 // Simple chat message

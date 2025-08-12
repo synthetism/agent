@@ -100,17 +100,38 @@ interface OpenWeatherResponse {
 
 interface ForecastResponse {
   city: {
+    id: number;
     name: string;
+    coord: { lat: number; lon: number };
     country: string;
+    population: number;
+    timezone: number;
+    sunrise: number;
+    sunset: number;
   };
   list: Array<{
     dt: number;
-    main: { temp: number };
+    main: { 
+      temp: number;
+      feels_like: number;
+      temp_min: number;
+      temp_max: number;
+      pressure: number;
+      humidity: number;
+    };
     weather: Array<{
+      id: number;
+      main: string;
       description: string;
       icon: string;
     }>;
+    clouds: { all: number };
+    wind: { speed: number; deg: number; gust?: number };
+    visibility: number;
+    pop: number;
     rain?: { '3h': number };
+    sys: { pod: string };
+    dt_txt: string;
   }>;
 }
 
@@ -356,13 +377,13 @@ Note: Without API key, returns realistic mock data for development.
 
     try {
       // STEP 1: Try direct weather API first (for exact city names)
-      let url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${this.props.apiKey}&units=${weatherUnits}&lang=en`;
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${this.props.apiKey}&units=${weatherUnits}&lang=en`;
       
       console.log(url);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.props.timeout);
       
-      let response = await fetch(url, {
+      const response = await fetch(url, {
         method: 'GET',
         signal: controller.signal
       });
@@ -398,7 +419,7 @@ Note: Without API key, returns realistic mock data for development.
 
     try {
       const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${this.props.apiKey}&units=${units || this.props.defaultUnits}&limit=3`;
-
+      
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.props.timeout);
       
@@ -411,13 +432,13 @@ Note: Without API key, returns realistic mock data for development.
 
       if (!response.ok) {
         if (response.status === 404) {
-          throw new Error(`[WeatherUnit] Location "${location}" not found`);
+          throw new Error(`[WeatherUnit] Latitude "${lat}" and Longitude "${lon}" not found`);
         }
         throw new Error(`[WeatherUnit] Weather API error: ${response.status}`);
       }
 
       const data = await response.json() as ForecastResponse;
-      return this.transformForecastData(data, days);
+      return this.transformForecastData(data, units || this.props.defaultUnits);
     } catch (error) {
       if (error instanceof Error) {
         throw error;
@@ -541,12 +562,12 @@ Note: Without API key, returns realistic mock data for development.
     };
   }
 
-  private transformForecastData(data: ForecastResponse, days: number): ForecastData {
+  private transformForecastData(data: ForecastResponse, units: string): ForecastData {
     const forecasts = [];
     const dailyData = new Map<string, ForecastResponse['list']>();
 
-    // Group by date
-    for (const item of data.list.slice(0, days * 8)) {
+    // Group by date (OpenWeather gives 5-day forecast in 3-hour intervals)
+    for (const item of data.list) {
       const date = new Date(item.dt * 1000).toISOString().split('T')[0];
       if (!dailyData.has(date)) {
         dailyData.set(date, []);
@@ -557,8 +578,8 @@ Note: Without API key, returns realistic mock data for development.
       }
     }
 
-    // Process each day
-    for (const [date, dayData] of Array.from(dailyData.entries()).slice(0, days)) {
+    // Process each day (limit to 5 days max)
+    for (const [date, dayData] of Array.from(dailyData.entries()).slice(0, 5)) {
       const temps = dayData.map(d => d.main.temp);
       const high = Math.round(Math.max(...temps));
       const low = Math.round(Math.min(...temps));
@@ -578,7 +599,7 @@ Note: Without API key, returns realistic mock data for development.
       location: data.city.name,
       country: data.city.country,
       forecasts,
-      units: this.props.defaultUnits,
+      units: units,
       timestamp: new Date()
     };
   }

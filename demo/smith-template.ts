@@ -16,7 +16,12 @@ import { WeatherUnit } from '../src/tools/weather.unit.js';
 import { NodeFileSystem, ObservableFileSystem } from '@synet/fs/promises';
 import { createAIFileSystem } from '@synet/fs-ai';
 import { AsyncFileSystem } from "@synet/fs";
-import { AgentInstructions} from "../src/types/agent.types.js"
+import { Weather, OpenWeather2 } from "@synet/weather"
+import type { AgentInstructions} from "../src/types/agent.types.js"
+import { Email } from "@synet/email"
+import { Hasher } from "@synet/hasher"
+import { Crypto } from "@synet/crypto"
+
 
 async function runSmithWeatherDemo() {
   console.log('🕶️  Agent Smith Weather Demo');
@@ -44,9 +49,26 @@ async function runSmithWeatherDemo() {
 
     // Step 2: Create tools first
     console.log('🛠️  Creating tools...');
-    const weather = WeatherUnit.create({
+   /*  const weather = WeatherUnit.create({
       apiKey: weatherConfig.apiKey
+    }); */
+
+    const openweather  = new OpenWeather2({ 
+      apiKey:weatherConfig.apiKey,
+      timeout: 10000 
     });
+  
+    // Create weather unit
+    const weather = Weather.create({
+      provider:openweather,
+      defaultUnits: 'metric'
+    });
+
+        // Enable hasher for cryptographic operations - now using Unit Architecture v1.0.8!
+    const hasher = Hasher.create();
+
+    //const crypto = Crypto.create();
+
     console.log('✅ Weather tool ready');
 
     // Step 3: Setup AI-safe filesystem with event monitoring (like ai-demo-fs)
@@ -96,9 +118,15 @@ async function runSmithWeatherDemo() {
     console.log('✅ AI operator created');
     
     console.log('🧠 Teaching AI the tools...');
-    ai.learn([weather.teach(), fs.teach()]);
+    ai.learn([
+      weather.teach(),
+      hasher.teach(),
+      fs.teach(),
+    ]);
     console.log('✅ AI learned tools\n');
+    console.log('Available capabilities:', ai.capabilities().list());
 
+    process.exit(1);
     // Step 5: Create Agent Smith with parsed template instructions
     console.log('🕶️  Creating Agent Smith with template support...');
     const smith = Smith.create({ 
@@ -146,13 +174,13 @@ Success Criteria:
 Think like a luxury travel consultant with access to real-time weather intelligence. Make this recommendation count!
 `;
 
-    const result = await smith.executeMission(mission);
+    const result = await smith.run(mission);
     
     console.log('\n📊 Mission Summary:');
     console.log('==================');
-    console.log(`Goal: Ultimate Beach Destination Intelligence`);
+    console.log('Goal: Ultimate Beach Destination Intelligence');
     console.log(`Completed: ${result.completed}`);
-    console.log(`Iterations: ${result.iterations}`);``
+    console.log(`Iterations: ${result.iterations}`);
     console.log(`Messages: ${result.messages.length}`);
     
     if (result.completed) {

@@ -3,7 +3,7 @@
  * Focus: Basic variable replacement for template-based prompts
  */
 
-import { TemplateVariables } from '../types/agent.types.js';
+import type { TemplateVariables } from '../types/agent.types.js';
 
 export class SimpleTemplateEngine {
   
@@ -31,7 +31,7 @@ export class SimpleTemplateEngine {
       task: '',
       availableTools: '',
       promptTemplate: '',
-      eventContext: '',
+      systemEvents: '',
       workerResponse: '',
       conversationHistory: '',
       ...variables

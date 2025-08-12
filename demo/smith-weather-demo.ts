@@ -134,7 +134,7 @@ Success Criteria:
 Think like a luxury travel consultant with access to real-time weather intelligence. Make this recommendation count!
 `;
 
-    const result = await smith.executeMission(mission);
+    const result = await smith.run(mission);
     
     console.log('\n📊 Mission Summary:');
     console.log('==================');

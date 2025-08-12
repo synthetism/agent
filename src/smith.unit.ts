@@ -11,21 +11,14 @@
  * 4. Monitor responses and decide next actions
  */
 
-import { Unit, createUnitSchema, UnitProps } from '@synet/unit';
-import { Capabilities, Schema, Validator, UnitCore } from '@synet/unit';
+import { Unit, createUnitSchema, } from '@synet/unit';
+import type { Capabilities, Schema, Validator, UnitCore, UnitProps } from '@synet/unit';
 import { Capabilities as CapabilitiesClass, Schema as SchemaClass, Validator as ValidatorClass } from '@synet/unit';
 import type { AIResponse, ChatMessage } from '@synet/ai';
-import { AIOperator } from '@synet/ai';
+import type { AIOperator } from '@synet/ai';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { AgentInstructions } from "./types/agent.types"
-
-// Simple template types for Smith
-interface TemplateVariables {
-  task?: string;
-  availableTools?: string;
-  promptTemplate?: string;
-}
+import type { AgentInstructions, AgentTemplate, Templates, TemplateVariables } from "./types/agent.types"
 
 
 /* 
@@ -57,6 +50,10 @@ class SimpleTemplateEngine {
     });
     
     return rendered.trim();
+  }
+
+  nonstatic() {
+    // Non-static method implementation
   }
 }
 
@@ -157,10 +154,11 @@ export class Smith extends Unit<SmithProps> {
 
     // No file parsing here - template instructions come pre-parsed from outside
     const props: SmithProps = {
-      dna: createUnitSchema({
+      dna: {
         id: 'smith',
-        version: VERSION
-      }),
+        version: VERSION,
+        description: "AI Agent - Mission Orchestrator"
+      },
       ai: config.ai,
       identity,
       maxIterations: config.maxIterations || 10,
@@ -255,13 +253,29 @@ export class Smith extends Unit<SmithProps> {
   /**
    * Render template with variables (do one thing well)
    */
-  private renderTemplate(templateName: 'taskBreakdown' | 'workerPromptGeneration', variables: TemplateVariables): string {
+  private renderTemplate(templateName: Templates, variables: TemplateVariables): string {
     if (!this.props.templateInstructions?.templates?.[templateName]) {
       throw new Error(`Template '${templateName}' not found in template instructions`);
     }
+
+    const template = this.getTemplate(templateName);
+    const rendered =  SimpleTemplateEngine.render(template.prompt, variables);
+
+   if(templateName ==='resultAnalysis') {
+        console.log('Rendered result analysis template:', rendered);
+    }
+
+    return rendered;
     
+
+  }
+
+  private getTemplate(templateName: Templates): AgentTemplate {
     const template = this.props.templateInstructions.templates[templateName];
-    return SimpleTemplateEngine.render(template.prompt, variables);
+    if (!template) {
+      throw new Error(`Template '${templateName}' not found in template instructions`);
+    }
+    return template;
   }
 
   // =============================================================================
@@ -276,7 +290,7 @@ export class Smith extends Unit<SmithProps> {
    * 4. Continue until complete
    * 5. Exit call - Smith reports final result
    */
-  async executeMission(task: string): Promise<SmithExecution> {
+  async run(task: string): Promise<SmithExecution> {
     console.log(`🕶️  [${this.props.identity.name}] Mission received: ${task}`);
     
     const execution: SmithExecution = {
@@ -298,16 +312,26 @@ export class Smith extends Unit<SmithProps> {
 
     try {
       // STEP 1: Entry call - get task breakdown
-      console.log(`[Smith] Breaking down mission into steps...`);
-      const taskBreakdown = await this.getTaskBreakdown(task);
+      console.log('[Smith] Breaking down mission into steps...');
+
+      const taskrompt = this.renderTemplate('taskBreakdown', {
+        task,
+        availableTools: this.props.learnedTools.join(', ') || 'No tools available',
+      });
+
+      const taskBreakdown = await this.props.ai.chat([
+        { role: 'system', content: this.props.templateInstructions.templates.taskBreakdown.prompt.system },
+        { role: 'user', content: taskrompt }
+      ]);
+
       console.log(`[Smith] Task breakdown:\n${taskBreakdown}`);
       
       smithMemory.push({
         role: 'user',
-        content: task
+        content: taskrompt
       }, {
         role: 'assistant', 
-        content: taskBreakdown
+        content: taskBreakdown.content
       });
 
       // STEP 2: Execute steps individually
@@ -383,14 +407,14 @@ export class Smith extends Unit<SmithProps> {
 
       // STEP 4: Exit call - final report
       if (execution.completed) {
-        console.log(`📊 [Smith] Generating final report...`);
+        console.log('📊 [Smith] Generating final report...');
         const finalReport = await this.generateFinalReport(smithMemory);
         execution.result = finalReport;
         console.log(`📋 [Smith] Final report: ${finalReport}`);
       }
 
     } catch (error: any) {
-      console.error(`❌ [Smith] Execution error:`, error);
+      console.error('❌ [Smith] Execution error:', error);
       smithMemory.push({
         role: 'user',
         content: `Error occurred: ${error?.message || error}. ${this.props.identity.errorRecovery.fallbackStrategy}`
@@ -404,80 +428,20 @@ export class Smith extends Unit<SmithProps> {
     return execution;
   }
 
-  /**
-   * Entry call - Smith breaks down mission into discrete steps
-   */
-  private async getTaskBreakdown(task: string): Promise<string> {
-    // Use template if available, otherwise fallback to hardcoded method
-    if (this.props.templateInstructions?.templates?.taskBreakdown) {
-      console.log('🎯 Using template-driven task breakdown');
-      
-      const renderedPrompt = this.renderTemplate('taskBreakdown', {
-        task,
-        availableTools: this.props.learnedTools.join(', ') || 'No tools available',
-      });
-
-      const response = await this.props.ai.chat([
-        { role: 'system', content: this.props.templateInstructions.templates.taskBreakdown.prompt.system },
-        { role: 'user', content: renderedPrompt }
-      ]);
-
-      return response.content;
-    }
-
-    // Fallback to original hardcoded method
-    console.log('📝 Using hardcoded task breakdown (fallback)');
-    const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
-    
-    const breakdownPrompt = `YOUR MISSION: ${task}
-AVAILABLE TOOLS (ALL AVAILABLE TO WORKERS): ${availableTools}
-USE PROMPT INSTRUCTIONS TO DIRECT AI WORKER: "${this.props.identity.promptTemplate}"
-FORMAT: Use plain text prompts, don't use markdown, unless required by the task. 
-
-Break this mission down into discrete, executable steps. Each step should use ONE specific tool. Use only tools that are listed. 
-
-Respond with a numbered breakdown and follow your plan to accomplish the mission.`;
-
-    const response = await this.props.ai.chat([
-      { role: 'system', content: this.props.identity.systemPrompt },
-      { role: 'user', content: breakdownPrompt }
-    ]);
-
-    return response.content;
-  }
 
   /**
    * Analyze result - determine if step completed or next task needed
    */
   private async analyzeResult(smithMemory: ChatMessage[], response: string): Promise<'completed' | 'next_task'> {
-    // Check for filesystem errors first
-    const fsContext = this.getFileSystemContext();
-    const hasErrors = this.hasRecentFileSystemErrors();
+    
     const lastError = this.getLastFileSystemError();
     
-    const analysisPrompt = `Analyze the worker AI response and determine mission status.
 
-WORKER AI RESPONSE: ${response}
-
-FILESYSTEM OPERATIONS STATUS:
-${fsContext}
-
-${hasErrors ? `⚠️ CRITICAL: Recent filesystem error detected: ${lastError}` : ''}
-
-Based on the response above and the conversation history, determine:
-- Is the ENTIRE mission completed successfully? 
-- Or should we continue with the next task?
-- Are there any filesystem operation failures that need to be addressed?
-
-${hasErrors ? 'NOTE: If there are filesystem errors, the mission is NOT completed regardless of what the worker claims.' : ''}
-
-Check for completion signals like "MISSION_COMPLETE", successful file saves, or mission objectives achieved.
-IMPORTANT: Verify actual filesystem operation success, not just worker claims.
-
-Respond with ONLY one word:
-- "completed" if the entire mission is finished AND no filesystem errors exist
-- "next_task" if we should continue with the next step OR if filesystem errors need fixing`;
-
+    const analysisPrompt = this.renderTemplate('resultAnalysis', {
+        workerResponse: response,
+        systemEvents: lastError || 'No errors detected',
+    });
+  
     smithMemory.push({
       role: 'user',
       content: analysisPrompt
@@ -496,24 +460,18 @@ Respond with ONLY one word:
    * Exit call - Smith generates final report based on message history
    */
   private async generateFinalReport(smithMemory: ChatMessage[]): Promise<string> {
-    const finalReportPrompt = `Mission completed! Generate a final summary report.
+  
+    const conversationHistory = smithMemory.slice(1).map((msg, i) => `${i + 1}. ${msg.role.toUpperCase()}: ${msg.content}`).join('\n');
 
-CONVERSATION HISTORY:
-${smithMemory.slice(1).map((msg, i) => `${i + 1}. ${msg.role.toUpperCase()}: ${msg.content}`).join('\n')}
+    const template = this.getTemplate('finalReport');
 
-Based on the conversation history above, create a concise mission summary:
-
-MISSION SUMMARY:
-- Original Goal: [extract from history]
-- Steps Completed: [list key accomplishments]
-- Final Result: [what was achieved]
-- Status: Mission Complete
-
-Generate ONLY a text summary report. Do not use any tools during this final report generation.`;
+    const finalReportPrompt = this.renderTemplate('finalReport', {
+        conversationHistory: conversationHistory,     
+    });
 
     // Use chat instead of call to avoid tool execution during final report
     const response = await this.props.ai.chat([
-      { role: 'system', content: 'You are generating a final mission summary report. Do not use tools.' },
+      { role: 'system', content: template.prompt.system },
       { role: 'user', content: finalReportPrompt }
     ]);
     return response.content;
@@ -577,82 +535,6 @@ Generate the worker prompt using the template format with ALL variables filled i
   }
 
   /**
-   * Build a summary of what has been accomplished so far
-   * Smith analyzes conversation history to determine progress
-   */
-  private async buildProgressSummary(smithMemory: ChatMessage[]): Promise<string> {
-    if (smithMemory.length <= 1) {
-      return "No progress yet - mission just started.";
-    }
-
-    const progressAnalysisPrompt = `Analyze the conversation history and summarize what has been accomplished so far.
-
-CONVERSATION HISTORY:
-${smithMemory.slice(1).map((msg, i) => `${i + 1}. ${msg.role.toUpperCase()}: ${msg.content}`).join('\n')}
-
-Provide a concise summary of:
-1. What actions have been completed successfully
-2. What data/results have been gathered  
-3. What still needs to be done
-
-Focus on concrete accomplishments and avoid repeating the same information.`;
-
-    const response = await this.props.ai.chat([
-      { role: 'system', content: 'You are Agent Smith analyzing mission progress.' },
-      { role: 'user', content: progressAnalysisPrompt }
-    ]);
-
-    return response.content;
-  }
-
-
-  /**
-   * Generate initial worker prompt using identity template (first iteration only)
-   */
-  private generateWorkerPrompt(task: string): string {
-    const availableTools = this.props.learnedTools.join(', ') || 'No tools available';
-    
-    return `${this.props.identity.description}
-
-OBJECTIVE: ${this.props.identity.objective}
-
-MISSION: ${task}
-
-AVAILABLE TOOLS: ${availableTools}
-
-INSTRUCTIONS:
-${this.props.identity.missionStrategy.analysis}
-${this.props.identity.missionStrategy.toolSelection}
-Execute step by step and end with one of: ${this.props.identity.completionSignals.join(', ')}`;
-  }
-
-  /**
-   * Generate next prompt based on previous response (deprecated - use generateNextWorkerPrompt)
-   */
-  private generateNextPrompt(previousResponse: string, originalTask: string): string {
-    // Simple continuation for now - can be made more sophisticated
-    return 'Continue with next step of the mission.';
-  }
-
-  // =============================================================================
-  // DECISION LOGIC
-  // =============================================================================
-
-  /**
-   * Detect if goal is complete using identity completion signals
-   */
-  private isGoalComplete(response: string): boolean {
-    const lowerResponse = response.toLowerCase();
-    return this.props.identity.completionSignals.some(signal => 
-      lowerResponse.includes(signal.toLowerCase())
-    );
-  }
-
-  // =============================================================================
-  // TOOL LEARNING (No Teaching - Smith is pure orchestrator)
-  // =============================================================================
-
-  /**
    * Smith learns tools from other units but doesn't teach (like @synet/ai)
    */
   learn(contracts: Array<{ unitId: string; capabilities: Capabilities; schema: Schema; validator: Validator }>): void {
@@ -682,7 +564,7 @@ Execute step by step and end with one of: ${this.props.identity.completionSignal
    */
   help(): string {
     return `
-${this.props.identity.name} - AI Mission Orchestrator
+${this.props.identity.name} - AI Agent - Mission Orchestrator
 
 IDENTITY: ${this.props.identity.description}
 OBJECTIVE: ${this.props.identity.objective}
