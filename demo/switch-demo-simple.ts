@@ -28,8 +28,8 @@ async function runSmithWeatherDemo() {
   console.log('Switch Simple Weather Demo');
   console.log('===============================\n');
   
-  const provider = 'openai';
-  const model = 'gpt-5';
+  const provider = 'deepseek';
+  const model = 'deepseek-chat';
 
 
   try {
@@ -171,24 +171,24 @@ async function runSmithWeatherDemo() {
 
           switchUnit.addEvent({
                 type: type,
-                message:`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`,
+                message:`🔴 [${type}] - ERROR: ${data.error.message}`,
                 timestamp: new Date().toISOString(),
 
           });
 
-          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);      
+          console.log (`🔴 [${type}] - ERROR: ${data.error.message}`);      
           console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
         } else {
 
            switchUnit.addEvent({
                 type: type,
-                message:`🟢 [FS-EVENT] ${type} - SUCCESS `,
+                message:`🟢 [${type}] - SUCCESS `,
                 timestamp: new Date().toISOString(),
 
           });
 
-          console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
+          console.log(`🟢 [${type}] - SUCCESS`);
+          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
       
 
         }

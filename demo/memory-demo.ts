@@ -4,7 +4,7 @@
  * Demonstrates Memory unit with event emission for debugging operations
  */
 
-import { Memory, type MemoryPushEvent, type MemoryPopEvent, type MemoryRecallEvent, type MemoryClearEvent } from '../memory.unit';
+import { Memory, type MemoryPushEvent, type MemoryPopEvent, type MemoryRecallEvent, type MemoryClearEvent } from '../src/memory.unit';
 
 // Example: Memory unit with event debugging
 export async function memoryDebuggingExample() {
@@ -35,9 +35,9 @@ export async function memoryDebuggingExample() {
 
   // Test memory operations with debugging
   console.log('1. Adding items to memory...');
-  memory.push({ action: 'start', message: 'Hello World' }, 'greeting');
-  memory.push({ action: 'process', data: [1, 2, 3] }, 'data');
-  memory.push({ action: 'complete', result: 'success' }, 'result');
+  memory.push({ role: 'user', content: 'Hello World' }, 'greeting');
+  memory.push({ role: 'user', content: 'Process data' }, 'data');
+  memory.push({ role: 'user', content: 'Complete task' }, 'result');
 
   console.log('\n2. Listing all items...');
   const items = memory.list();

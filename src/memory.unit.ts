@@ -120,7 +120,7 @@ export class Memory extends Unit<MemoryProps> {
     const capabilities = CapabilitiesClass.create(this.dna.id, {
       list: (...args: unknown[]) => this.list(),
       recall: (...args: unknown[]) => this.recall(args[0] as string),
-      getChatMessages: (...args: unknown[]) => this.getChatMessages(),
+      getMessages: (...args: unknown[]) => this.getMessages(),
     });
 
     const schema = SchemaClass.create(this.dna.id, {
@@ -142,9 +142,9 @@ export class Memory extends Unit<MemoryProps> {
         parameters: { type: 'object', properties: {} },
         response: { type: 'array' }
       },
-      getChatMessages: {
-        name: 'getChatMessages',
-        description: 'Get memory items as ChatMessages for AI consumption',
+      getMessages: {
+        name: 'getMessages',
+        description: 'Get memory items as messages for AI consumption',
         parameters: { type: 'object', properties: {} },
         response: { type: 'array' }
       }
@@ -228,8 +228,8 @@ export class Memory extends Unit<MemoryProps> {
   /**
    * Add item to memory
    */
-  push<T>(data: T, type?: string): string {
-    const item: MemoryItem<T> = {
+  push(data: ChatMessage, type?: string): string {
+    const item: MemoryItem = {
       id: `mem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       data,
       timestamp: new Date().toISOString(),
@@ -354,7 +354,7 @@ export class Memory extends Unit<MemoryProps> {
    * Get memory items as ChatMessages for AI consumption
    * Filters and converts MemoryItems that contain ChatMessage data
    */
-  getChatMessages(): ChatMessage[] {
+  getMessages(): ChatMessage[] {
     return this.props.items
       .filter(item => this.isValidChatMessage(item.data))
       .map(item => item.data as ChatMessage);

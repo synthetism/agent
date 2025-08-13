@@ -282,11 +282,11 @@ export class Switch extends Unit<SwitchProps> {
     };
 
     // Smith's memory for the full conversation
-    const switchMemory: ChatMessage[] = [
-      { role: 'system', content: this.props.identity.systemPrompt }
-    ];
-        
-    this.props.memory.push(switchMemory);
+ 
+    this.props.memory.push({
+       role: 'system', 
+       content: this.props.identity.systemPrompt 
+    });
 
     try {
       // STEP 1: Entry call - get task breakdown
@@ -296,7 +296,6 @@ export class Switch extends Unit<SwitchProps> {
       const taskPrompt = this.renderTemplate('taskBreakdown', {
         task,
         tools: this.capabilities().list().join(', ') || 'No tools available',
-        schemas: JSON.stringify(this.schema().toJson()) || 'No schemas available',
       });
 
 
@@ -307,13 +306,13 @@ export class Switch extends Unit<SwitchProps> {
 
       console.log(`[${this.props.dna.id}] Task breakdown:\n${taskBreakdown.content}`);
       
-      this.props.memory.push({
+      /* this.props.memory.push({
         role: 'user',
         content: taskPrompt
-      });
+      }); */
 
       this.props.memory.push({
-        role: 'assistant', 
+        role: 'assistant',
         content: taskBreakdown.content
       });
 
@@ -323,11 +322,11 @@ export class Switch extends Unit<SwitchProps> {
         console.log(`[Switch] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
         // Generate next specific prompt using template and full memory context
-        const promptTemplate = this.renderTemplate('workerPromptGeneration',{})
-           
+        const promptTemplate = this.renderTemplate('workerPromptGeneration',{});
+
         // Switch thinks about next step (internal reasoning)
         const nextStepResponse = await this.props.ai.chat([
-          ...switchMemory,
+          ...this.props.memory.getMessages(),
           { role: 'user', content: promptTemplate }
         ]);
         
@@ -336,13 +335,12 @@ export class Switch extends Unit<SwitchProps> {
         // Add Switch's planning to memory as assistant reasoning
         this.props.memory.push({
           role: 'assistant',
-          content: `Call tool: ${nextStepResponse.content}`
+          content: `${nextStepResponse.content}`
         });
 
         // Switch executes the planned action with tools
-        const response = await this.props.ai.chatWithTools(switchMemory);
+        const response = await this.props.ai.chatWithTools(this.props.memory.getMessages());
         console.log(`[${this.props.dna.id}]: ${response.content}`);
-
  
          // Add Switch's action result to memory
         this.props.memory.push({
@@ -371,12 +369,12 @@ export class Switch extends Unit<SwitchProps> {
       systemEvents: lastEvent || 'No events detected',
     });
   
-      this.props.memory.push<ChatMessage>({
+      this.props.memory.push({
         role: 'user',
         content: analysisPrompt
       });
 
-      const messages = this.props.memory.getChatMessages();
+      const messages = this.props.memory.getMessages();
 
        const analysis = await this.props.ai.chat(messages);
 
@@ -407,7 +405,7 @@ export class Switch extends Unit<SwitchProps> {
       // STEP 4: Exit call - final report
       if (execution.completed) {
         console.log('[Switch] Generating final report...');
-        const finalReport = await this.generateFinalReport(switchMemory);
+        const finalReport = await this.generateFinalReport(this.props.memory.getMessages());
         execution.result = finalReport;
         console.log(`[${this.props.dna.id}] Final report: ${finalReport}`);
       }
@@ -415,7 +413,7 @@ export class Switch extends Unit<SwitchProps> {
     } catch (error: unknown) {
 
       console.error(`❌ [${this.props.dna.id}] Execution error:`, error);
-      switchMemory.push({
+      this.props.memory.push({
         role: 'user',
         content: `Error occurred: ${error instanceof Error ? error.message : String(error)}. ${this.props.identity.errorRecovery.fallbackStrategy}`
       });
