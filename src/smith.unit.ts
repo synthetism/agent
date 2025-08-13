@@ -18,7 +18,7 @@ import type { AIResponse, ChatMessage } from '@synet/ai';
 import type { AIOperator } from '@synet/ai';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { AgentInstructions, AgentTemplate, Templates, TemplateVariables } from "./types/agent.types"
+import type { AgentEvent, AgentInstructions, AgentTemplate, Templates, TemplateVariables } from "./types/agent.types"
 
 
 /* 
@@ -97,7 +97,7 @@ interface SmithProps extends UnitProps {
   ai: AIOperator;
   identity: SmithIdentity;
   maxIterations: number;
-  fsEventMemory: string[]; // Store filesystem events for awareness
+  eventMemory: AgentEvent[]; // Store filesystem events for awareness
   templateInstructions: AgentInstructions; // Parsed template object
 }
 
@@ -164,7 +164,7 @@ export class Smith extends Unit<SmithProps> {
       agent: config.agent || config.ai,
       identity,
       maxIterations: config.maxIterations || 10,
-      fsEventMemory: [], // Initialize filesystem event memory
+      eventMemory: [], // Initialize filesystem event memory
       templateInstructions: config.templateInstructions // Pre-parsed object
     };
 
@@ -175,84 +175,52 @@ export class Smith extends Unit<SmithProps> {
   // FILESYSTEM EVENT AWARENESS
   // =============================================================================
 
-  /**
-   * Subscribe to filesystem events to maintain awareness of operations
-   */
-  subscribeToFileSystemEvents(eventEmitter: any): void {
-    console.log(`🕶️  [${this.dna.id}] Subscribing to filesystem events for operational awareness...`);
-    
-    // Subscribe to file write events
-    eventEmitter.subscribe('file.write', {
-      update: (event: any) => {
-        const { type, data } = event;
-        const eventLog = data.error 
-          ? `❌ FS-ERROR: ${data.operation} failed on ${data.filePath} - ${data.error.message}`
-          : `✅ FS-SUCCESS: ${data.operation} completed on ${data.filePath} (${data.result} bytes)`;
-        
-        // Add to Smith's filesystem event memory
-        this.props.fsEventMemory.push(eventLog);
-        
-        // Keep only last 10 events to avoid memory bloat
-        if (this.props.fsEventMemory.length > 10) {
-          this.props.fsEventMemory = this.props.fsEventMemory.slice(-10);
-        }
-        
-        console.log(`🧠 [${this.dna.id}] Filesystem Event Recorded: ${eventLog}`);
-      }
-    });
-
-    // Subscribe to other filesystem events if needed
-    eventEmitter.subscribe('file.read', {
-      update: (event: any) => {
-        const { type, data } = event;
-        const eventLog = data.error 
-          ? `❌ FS-ERROR: read failed on ${data.filePath} - ${data.error.message}`
-          : `📖 FS-READ: successfully read ${data.filePath}`;
-        
-        this.props.fsEventMemory.push(eventLog);
-        if (this.props.fsEventMemory.length > 10) {
-          this.props.fsEventMemory = this.props.fsEventMemory.slice(-10);
-        }
-      }
-    });
-  }
-
-  /**
-   * Get current filesystem event context for worker prompts
-   */
-  getFileSystemContext(): string {
-    if (this.props.fsEventMemory.length === 0) {
-      return "No systems events.";
-    }
-    
-    return `Recent events:\n${this.props.fsEventMemory.join('\n')}`;
-  }
-
-  /**
-   * Check for recent filesystem errors that need immediate attention
-   */
-  hasRecentFileSystemErrors(): boolean {
-    return this.props.fsEventMemory.some(event => event.includes('❌ FS-ERROR'));
-  }
-
-  /**
-   * Get the most recent filesystem error for analysis
-   */
-  getLastFileSystemError(): string | null {
-    for (let i = this.props.fsEventMemory.length - 1; i >= 0; i--) {
-      if (this.props.fsEventMemory[i].includes('❌ FS-ERROR')) {
-        return this.props.fsEventMemory[i];
-      }
-    }
-    return null;
-  }
-
-    getLastEvent(): string | null {
-  
-     return this.props.fsEventMemory[this.props.fsEventMemory.length - 1] || null;
-   
  
-   }
+  
+     addEvent(event: AgentEvent): void {
+        // Ensure timestamp if not provided
+        if (!event.timestamp) {
+          event.timestamp = new Date().toISOString();
+        }
+        
+        this.props.eventMemory.push(event);
+        
+        // Keep only last 10 events to prevent memory bloat
+        if (this.props.eventMemory.length > 10) {
+          this.props.eventMemory = this.props.eventMemory.slice(-10);
+        }
+     }
+  
+  
+  getLastEvent(): string | null {
+      const lastEvent = this.props.eventMemory[this.props.eventMemory.length - 1];
+      if (!lastEvent) return null;
+      
+      // Serialize for agent context
+      return `Event: ${lastEvent.type}\nMessage: ${lastEvent.message}\nTimestamp: ${lastEvent.timestamp}`;
+    }
+
+    /**
+     * Get structured events context for AI analysis
+     */
+    getEventsContext(): string {
+      if (this.props.eventMemory.length === 0) {
+        return "No events detected.";
+      }
+      
+      // Return recent events as structured JSON
+      const recentEvents = this.props.eventMemory.slice(-5); // Last 5 events
+      return JSON.stringify(recentEvents, null, 2);
+    }
+
+    /**
+     * Check if there are recent error events
+     */
+    hasRecentErrors(): boolean {
+      return this.props.eventMemory.some(event => 
+        event.type.includes('error') || event.message.toLowerCase().includes('error')
+      );
+    }
 
   // =============================================================================
   // TEMPLATE SYSTEM (Template-driven prompts)
@@ -389,11 +357,11 @@ export class Smith extends Unit<SmithProps> {
         // Add to memory
         smithMemory.push({
           role: 'assistant',
-          content: 'Worker task: ' + workerPrompt
+          content: `Worker task: ${workerPrompt}`
         }, {
           role: 'assistant',
-          content: 'Worker response: ' + response.content
-        }); 
+          content: `Worker response: ${response.content}`
+        });
 
          /* smithMemory.push({
           role: 'assistant',

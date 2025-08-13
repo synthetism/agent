@@ -215,6 +215,7 @@ export class Switch extends Unit<SwitchProps> {
       const taskPrompt = this.renderTemplate('taskBreakdown', {
         task,
         tools: this.capabilities().list().join(', ') || 'No tools available',
+        schemas: 'Schemas are included in the tool call'
       });
 
 
@@ -225,10 +226,10 @@ export class Switch extends Unit<SwitchProps> {
 
       console.log(`[${this.props.dna.id}] Task breakdown:\n${taskBreakdown.content}`);
       
-      /* this.props.memory.push({
+       this.props.memory.push({
         role: 'user',
         content: taskPrompt
-      }); */
+      }); 
 
       this.props.memory.push({
         role: 'assistant',
@@ -247,26 +248,27 @@ export class Switch extends Unit<SwitchProps> {
 
         // Switch thinks about next step (internal reasoning)
         const nextStepResponse = await this.props.ai.chat([
-          { role: 'system', content: this.props.identity.missionStrategy.promptGeneration },
+          ...this.props.memory.getMessages(),
           { role: 'user', content: promptTemplate }
         ]);
-        
+
         console.log(`[${this.props.dna.id}] Planning next step: ${nextStepResponse.content}`);
         
-        // Add Switch's planning to memory as assistant reasoning
-         this.props.memory.push({
-          role: 'assistant',
-          content: `${nextStepResponse.content}`
-        }); 
-
-        // Switch executes the planned action with tools
-        const response = await this.props.ai.chatWithTools(this.props.memory.getMessages());
+        // DON'T store planning in memory - it confuses the worker AI
+        // Create clean worker context with just the essential prompt
+        const workerMemory: ChatMessage[] = [
+          { role: 'system', content: this.props.identity.systemPrompt },
+          { role: 'user', content: nextStepResponse.content }
+        ];
+        
+        // Switch executes the planned action with tools (using clean worker memory)
+        const response = await this.props.ai.chatWithTools(workerMemory);
         console.log(`[${this.props.dna.id}]: ${response.content}`);
  
-         // Add Switch's action result to memory
+         // Add Switch's action result to memory (cleaned)
         this.props.memory.push({
           role: 'assistant',
-          content: response.content
+          content: response.content,
         });
 
         // Track in execution
@@ -287,7 +289,7 @@ export class Switch extends Unit<SwitchProps> {
     const analysisPrompt = this.renderTemplate('resultAnalysis', {
       iteration: execution.iterations,
       maxIterations: this.props.maxIterations,
-      systemEvents: lastEvent || 'No events detected',
+      systemEvents: lastEvent || 'No new events',
     });
   
       this.props.memory.push({
@@ -447,6 +449,46 @@ export class Switch extends Unit<SwitchProps> {
     }
     return template;
   }
+
+  /**
+   * Filter and clean AI response content before storing in memory
+   * Removes verbose schemas, tool descriptions, and repetitive content
+   */
+  private cleanResponseContent(content: string): string {
+    // Remove tool schemas (large JSON objects)
+    let cleaned = content.replace(/TOOL SCHEMAS:.*?(?=\n\n|\n[A-Z]|$)/s, '');
+    
+    // Remove repetitive mission briefings
+    cleaned = cleaned.replace(/YOUR MISSION:.*?(?=\n\n|\n[A-Z]|$)/s, '');
+    
+    // Remove verbose available tools lists
+    cleaned = cleaned.replace(/AVAILABLE TOOLS.*?(?=\n\n|\n[A-Z]|$)/s, '');
+    
+    // Remove repetitive capability listings
+    cleaned = cleaned.replace(/Available capabilities:.*?(?=\n\n|\n[A-Z]|$)/s, '');
+    
+    // Extract just the core action/plan from verbose responses
+    const actionMatch = content.match(/Tool call:\s*(.+?)(?=\n\n|$)/s);
+    if (actionMatch) {
+      return actionMatch[1].trim();
+    }
+    
+    const planMatch = content.match(/\d+\)\s*(.+?)(?=\n\d+\)|$)/s);
+    if (planMatch) {
+      return planMatch[1].trim();
+    }
+    
+    // Fall back to first meaningful sentence if no patterns match
+    const lines = cleaned.split('\n').filter(line => 
+      line.trim() && 
+      !line.includes('Analysis:') && 
+      !line.includes('Completed:') &&
+      !line.includes('Remaining:')
+    );
+    
+    return lines.slice(0, 2).join(' ').trim() || `${content.substring(0, 200)}...`;
+  }
+
   /**
    * Get memory items as ChatMessages for AI consumption
    */

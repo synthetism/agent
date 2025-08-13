@@ -11,9 +11,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { AI, AIOperator } from '@synet/ai';
-import { Switch } from '../src/switch.unit.js';
+import { Smith } from '../src/smith.unit.js';
 import { WeatherUnit } from '../src/tools/weather.unit.js';
-import { NodeFileSystem, ObservableFileSystem, FilesystemEvent } from '@synet/fs/promises';
+import { NodeFileSystem, ObservableFileSystem } from '@synet/fs/promises';
 import { createAIFileSystem } from '@synet/fs-ai';
 import { AsyncFileSystem } from "@synet/fs";
 import { Weather, OpenWeather2 } from "@synet/weather"
@@ -21,16 +21,17 @@ import type { AgentInstructions} from "../src/types/agent.types.js"
 import { Email } from "@synet/email"
 import { Hasher } from "@synet/hasher"
 import { Crypto } from "@synet/crypto"
-import type { MemoryPushEvent } from '../src/memory.unit.js';
 
 
 async function runSmithWeatherDemo() {
-  console.log('Switch Simple Weather Demo');
+  console.log('🕶️  Agent Smith Weather Demo');
   console.log('===============================\n');
   
   const provider = 'openai';
   const model = 'gpt-5-mini';
 
+  const agent_provider = 'deepseek';
+  const agent_model = 'deepseek-chat';
 
   try {
     // Step 1: Load API keys and template instructions
@@ -39,28 +40,27 @@ async function runSmithWeatherDemo() {
       readFileSync(path.join('private', `${provider}.json`), 'utf-8')
     );
 
+    const agentconfig = JSON.parse(
+      readFileSync(path.join('private', `${agent_provider}.json`), 'utf-8')
+    );
     const weatherConfig = JSON.parse(
       readFileSync(path.join('private', 'openweather.json'), 'utf-8')
     );
     
     // Parse template instructions outside (lightweight approach)
     const templateInstructions = JSON.parse(
-      readFileSync(path.join('config', 'switch-instructions.json'), 'utf-8')
+      readFileSync(path.join('config', 'agent-instructions.json'), 'utf-8')
     ) as AgentInstructions;
     console.log('✅ API keys and templates loaded');
     console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
 
-    const credentialsPath = path.join(process.cwd(), "private", "smtp.json");
-    const credentialsData = readFileSync(credentialsPath, "utf-8");
-    const emailCConfig = JSON.parse(credentialsData);
-
     // Step 2: Create tools first
-    /* console.log('🛠️  Creating tools...');
+    console.log('🛠️  Creating tools...');
      const weather = WeatherUnit.create({
       apiKey: weatherConfig.apiKey
-    });  */
+    }); 
 
-   const openweather  = new OpenWeather2({ 
+   /*  const openweather  = new OpenWeather2({ 
       apiKey:weatherConfig.apiKey,
       timeout: 10000 
     });
@@ -69,11 +69,17 @@ async function runSmithWeatherDemo() {
     const weather = Weather.create({
       provider:openweather,
       defaultUnits: 'metric'
-    }); 
+    }); */
 
- 
+        // Enable hasher for cryptographic operations - now using Unit Architecture v1.0.8!
+    const hasher = Hasher.create();
+
+    //const crypto = Crypto.create();
+
+    console.log('✅ Weather tool ready');
+
     // Step 3: Setup AI-safe filesystem with event monitoring (like ai-demo-fs)
-    console.log('Setting up AI-safe filesystem with Observable wrapper...');
+    console.log('📁 Setting up AI-safe filesystem with Observable wrapper...');
     const baseFs = new NodeFileSystem();
     const aiFs = createAIFileSystem(baseFs, {
       homePath: process.cwd(), // Current directory as home
@@ -88,57 +94,15 @@ async function runSmithWeatherDemo() {
     
     // Setup event monitoring
     const eventEmitter = observableFs.getEventEmitter();
-    console.log(' Setting up filesystem event monitoring...');
+    console.log('👁️  Setting up filesystem event monitoring...');
     
- 
-
-    // Create the AsyncFileSystem unit
-    const fs = AsyncFileSystem.create({ adapter: observableFs });
-    console.log('✅ FS-AI tool ready with event monitoring\n');
-
-    // Step 4: Create AI operator and teach it tools
-    console.log('🤖 Creating AI operator...');
-    const ai = AIOperator.create({
-        type: provider,
-        options: {
-          apiKey: aiconfig.apiKey,
-          model: model,
-        },
-      });
-
-    console.log('AI operator created');
-    
-    console.log('Teaching AI the tools...');
-    ai.learn([
-      weather.teach(),
-      fs.teach(),
-    ]);
-    console.log('✅ AI learned tools\n');
-    console.log('Available capabilities:', ai.capabilities().list());
-
-    //process.exit(1);
-    // Step 5: Create Agent Smith with parsed template instructions
-    console.log('Creating Agent Switch with template support...');
-    const switchUnit = Switch.create({ 
-      ai,       
-      maxIterations: 20,
-      templateInstructions // Pass pre-parsed template object
-    });
-    console.log('✅', switchUnit.whoami());
-    console.log('🎯 Switch now has template-driven task breakdown capability');
-
-    const memory = switchUnit.getMemory();
-    const unsubscribePush = memory.on('push', (event: MemoryPushEvent) => {
-      console.log(`🧠 PUSH: Added item ${event.item.id} \n Memory contents ${JSON.stringify(event.item.data)} \n Total: ${event.total}`);
-    });
-    
-
+   
     eventEmitter.subscribe('file.write', {
       update: (event) => {
         const { type, data } = event;
         if (data.error) {
 
-          switchUnit.addEvent({
+          smith.addEvent({
                 type: type,
                 message:`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`,
                 timestamp: new Date().toISOString(),
@@ -149,7 +113,7 @@ async function runSmithWeatherDemo() {
           console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
         } else {
 
-           switchUnit.addEvent({
+           smith.addEvent({
                 type: type,
                 message:`🟢 [FS-EVENT] ${type} - SUCCESS `,
                 timestamp: new Date().toISOString(),
@@ -169,7 +133,7 @@ async function runSmithWeatherDemo() {
         const { type, data } = event;
         if (data.error) {
 
-          switchUnit.addEvent({
+          smith.addEvent({
                 type: type,
                 message:`🔴 [${type}] - ERROR: ${data.error.message}`,
                 timestamp: new Date().toISOString(),
@@ -180,7 +144,7 @@ async function runSmithWeatherDemo() {
           console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
         } else {
 
-           switchUnit.addEvent({
+           smith.addEvent({
                 type: type,
                 message:`🟢 [${type}] - SUCCESS `,
                 timestamp: new Date().toISOString(),
@@ -195,15 +159,63 @@ async function runSmithWeatherDemo() {
       }
     });
 
+    // Create the AsyncFileSystem unit
+    const fs = AsyncFileSystem.create({ adapter: observableFs });
+    console.log('✅ FS-AI tool ready with event monitoring\n');
 
+    // Step 4: Create AI operator and teach it tools
+    console.log('🤖 Creating AI operator...');
+    const ai = AIOperator.create({
+        type: provider,
+        options: {
+          apiKey: aiconfig.apiKey,
+          model: model,
+        },
+      });
+
+      const agent = AIOperator.create({
+        type: agent_provider,
+        options: {
+          apiKey: agentconfig.apiKey,
+          model: agent_model,
+        },
+     });
+    console.log('✅ AI operator created');
     
-    console.log('🧠 Teaching Switch tools (for context)...');
-    switchUnit.learn([weather.teach(), fs.teach()]);
-    console.log('✅', switchUnit.whoami());
+    console.log('🧠 Teaching AI the tools...');
+    ai.learn([
+      weather.teach(),
+      hasher.teach(),
+      fs.teach(),
+    ]);
+    console.log('✅ AI learned tools\n');
+    console.log('Available capabilities:', ai.capabilities().list());
+
+    //process.exit(1);
+    // Step 5: Create Agent Smith with parsed template instructions
+    console.log('🕶️  Creating Agent Smith with template support...');
+    const smith = Smith.create({ 
+      ai, 
+      agent,
+      maxIterations: 20,
+      templateInstructions // Pass pre-parsed template object
+    });
+    console.log('✅', smith.whoami());
+    console.log('🎯 Smith now has template-driven task breakdown capability');
+    
+   
+    console.log('Teaching Smith tools (for context)...');
+    smith.learn([weather.teach(), fs.teach()]);
+    console.log('✅', smith.whoami());
     console.log();
 
-    const mission = 'Find out the weather in New York, ensure `vault` dir exists and save report to \'vault/new-york-weather-report.md\'';
-    const result = await switchUnit.run(mission);
+    // Step 7: Smith creative beach destination mission with filesystem awareness
+    console.log('�️  Executing Smith creative beach destination mission...\n');
+    
+   const mission = 'Find out the weather in New York, and save report to \'vault/new-york-weather-report.md\'';
+   
+
+    const result = await smith.run(mission);
     
     console.log('\n📊 Mission Summary:');
     console.log('==================');
@@ -212,16 +224,11 @@ async function runSmithWeatherDemo() {
     console.log(`Iterations: ${result.iterations}`);
     console.log(`Messages: ${result.messages.length}`);
     
-    unsubscribePush();
-
     if (result.completed) {
-
-      console.log('✅ Switch demo completed successful!');   
-
+      console.log('✅ Smith beach destination mission successful!');
+      console.log('\n🏖️ Check vault/beach-destination-intelligence.md for the luxury travel recommendation');
     } else {
-
-      console.log('⚠️  Switch  mission incomplete ');
-
+      console.log('⚠️  Smith beach destination mission incomplete');
     }
 
   } catch (error) {
