@@ -185,10 +185,6 @@ export class WeatherUnit extends Unit<WeatherProps> {
         const params = args[0] as { latitude: number; longitude: number; units?: 'metric' | 'imperial' | 'kelvin' };
         return this.getWeatherByCoords(params.latitude, params.longitude, params.units);
       },
-      searchLocation: (...args: unknown[]) => {
-        const params = args[0] as { query: string };
-        return this.searchLocation(params.query);
-      }
     });
 
     const schema = SchemaClass.create(this.dna.id, {
@@ -250,21 +246,6 @@ export class WeatherUnit extends Unit<WeatherProps> {
         },
         response: { type: 'object', properties: { location: { type: 'string', description: 'Location name' }, temperature: { type: 'number', description: 'Temperature value' } } }
       },
-      searchLocation: {
-        name: 'searchLocation',
-        description: 'Search for location coordinates by name',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Location search query'
-            }
-          },
-          required: ['query']
-        },
-        response: { type: 'array', properties: { name: { type: 'string', description: 'Location name' }, lat: { type: 'number', description: 'Latitude' } } }
-      }
     });
 
     const validator = ValidatorClass.create({

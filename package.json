@@ -24,6 +24,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
+    "demo:switch": "tsx demo/switch-demo.ts",
+    "demo:smith": "tsx demo/smith-demo.ts",
     "test:watch": "vitest",
     "clean": "rimraf dist",
     "lint": "biome lint ./src",
@@ -80,7 +82,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@synet/ai": "^1.0.4",
+    "@synet/ai": "^1.0.5-dev.7",
     "@synet/unit": "^1.0.7"
   }
 }

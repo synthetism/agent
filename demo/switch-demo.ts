@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { AI, AIOperator } from '@synet/ai';
-import { Smith } from '../src/smith.unit.js';
+import { Switch } from '../src/switch.unit.js';
 import { WeatherUnit } from '../src/tools/weather.unit.js';
 import { NodeFileSystem, ObservableFileSystem } from '@synet/fs/promises';
 import { createAIFileSystem } from '@synet/fs-ai';
@@ -28,10 +28,8 @@ async function runSmithWeatherDemo() {
   console.log('===============================\n');
   
   const provider = 'openai';
-  const model = 'gpt-5';
+  const model = 'gpt-5-mini';
 
-  const agent_provider = 'openai';
-  const agent_model = 'gpt-5';
 
   try {
     // Step 1: Load API keys and template instructions
@@ -40,16 +38,13 @@ async function runSmithWeatherDemo() {
       readFileSync(path.join('private', `${provider}.json`), 'utf-8')
     );
 
-    const agentconfig = JSON.parse(
-      readFileSync(path.join('private', `${agent_provider}.json`), 'utf-8')
-    );
     const weatherConfig = JSON.parse(
       readFileSync(path.join('private', 'openweather.json'), 'utf-8')
     );
     
     // Parse template instructions outside (lightweight approach)
     const templateInstructions = JSON.parse(
-      readFileSync(path.join('config', 'agent-instructions.json'), 'utf-8')
+      readFileSync(path.join('config', 'switch-instructions.json'), 'utf-8')
     ) as AgentInstructions;
     console.log('✅ API keys and templates loaded');
     console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
@@ -71,15 +66,9 @@ async function runSmithWeatherDemo() {
       defaultUnits: 'metric'
     }); */
 
-        // Enable hasher for cryptographic operations - now using Unit Architecture v1.0.8!
-    const hasher = Hasher.create();
-
-    //const crypto = Crypto.create();
-
-    console.log('✅ Weather tool ready');
-
+ 
     // Step 3: Setup AI-safe filesystem with event monitoring (like ai-demo-fs)
-    console.log('📁 Setting up AI-safe filesystem with Observable wrapper...');
+    console.log('Setting up AI-safe filesystem with Observable wrapper...');
     const baseFs = new NodeFileSystem();
     const aiFs = createAIFileSystem(baseFs, {
       homePath: process.cwd(), // Current directory as home
@@ -94,7 +83,7 @@ async function runSmithWeatherDemo() {
     
     // Setup event monitoring
     const eventEmitter = observableFs.getEventEmitter();
-    console.log('👁️  Setting up filesystem event monitoring...');
+    console.log(' Setting up filesystem event monitoring...');
     
     eventEmitter.subscribe('file.write', {
       update: (event) => {
@@ -123,19 +112,11 @@ async function runSmithWeatherDemo() {
         },
       });
 
-      const agent = AIOperator.create({
-        type: agent_provider,
-        options: {
-          apiKey: agentconfig.apiKey,
-          model: agent_model,
-        },
-     });
     console.log('✅ AI operator created');
     
     console.log('🧠 Teaching AI the tools...');
     ai.learn([
       weather.teach(),
-      hasher.teach(),
       fs.teach(),
     ]);
     console.log('✅ AI learned tools\n');
@@ -143,24 +124,23 @@ async function runSmithWeatherDemo() {
 
     //process.exit(1);
     // Step 5: Create Agent Smith with parsed template instructions
-    console.log('🕶️  Creating Agent Smith with template support...');
-    const smith = Smith.create({ 
-      ai, 
-      agent,
+    console.log('Creating Agent Switch with template support...');
+    const switchUnit = Switch.create({ 
+      ai,       
       maxIterations: 20,
       templateInstructions // Pass pre-parsed template object
     });
-    console.log('✅', smith.whoami());
-    console.log('🎯 Smith now has template-driven task breakdown capability');
+    console.log('✅', switchUnit.whoami());
+    console.log('🎯 Switch now has template-driven task breakdown capability');
+
+    // Step 6: Subscribe Switch to filesystem events for operational awareness
+    console.log('🔗 Connecting Switch to filesystem event stream...');
+    switchUnit.subscribeToFileSystemEvents(eventEmitter);
+    console.log('✅ Switch is now filesystem-aware\n');
     
-    // Step 6: Subscribe Smith to filesystem events for operational awareness
-    console.log('🔗 Connecting Smith to filesystem event stream...');
-    smith.subscribeToFileSystemEvents(eventEmitter);
-    console.log('✅ Smith is now filesystem-aware\n');
-    
-    console.log('🧠 Teaching Smith tools (for context)...');
-    smith.learn([weather.teach(), fs.teach()]);
-    console.log('✅', smith.whoami());
+    console.log('🧠 Teaching Switch tools (for context)...');
+    switchUnit.learn([weather.teach(), fs.teach()]);
+    console.log('✅', switchUnit.whoami());
     console.log();
 
     // Step 7: Smith creative beach destination mission with filesystem awareness
@@ -189,7 +169,7 @@ Success Criteria:
 Think like a luxury travel consultant with access to real-time weather intelligence. Make this recommendation count!
 `;
 
-    const result = await smith.run(mission);
+    const result = await switchUnit.run(mission);
     
     console.log('\n📊 Mission Summary:');
     console.log('==================');

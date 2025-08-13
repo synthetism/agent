@@ -25,6 +25,8 @@ export interface TemplateVariables {
   systemEvents?: string;
   workerResponse?: string;
   conversationHistory?: string;
+  iteration?: number;
+  maxIterations?: number;
 }
 
 // Simple instructions structure

@@ -29,7 +29,8 @@ export class SimpleTemplateEngine {
   createContext(variables: Partial<TemplateVariables>): TemplateVariables {
     return {
       task: '',
-      availableTools: '',
+      tools: '',
+      schemas: '',
       promptTemplate: '',
       systemEvents: '',
       workerResponse: '',
