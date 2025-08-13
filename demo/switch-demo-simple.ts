@@ -21,6 +21,7 @@ import type { AgentInstructions} from "../src/types/agent.types.js"
 import { Email } from "@synet/email"
 import { Hasher } from "@synet/hasher"
 import { Crypto } from "@synet/crypto"
+import type { MemoryPushEvent } from '../src/memory.unit.js';
 
 
 async function runSmithWeatherDemo() {
@@ -105,9 +106,9 @@ async function runSmithWeatherDemo() {
         },
       });
 
-    console.log('✅ AI operator created');
+    console.log('AI operator created');
     
-    console.log('🧠 Teaching AI the tools...');
+    console.log('Teaching AI the tools...');
     ai.learn([
       weather.teach(),
       fs.teach(),
@@ -125,6 +126,12 @@ async function runSmithWeatherDemo() {
     });
     console.log('✅', switchUnit.whoami());
     console.log('🎯 Switch now has template-driven task breakdown capability');
+
+    const memory = switchUnit.getMemory();
+    const unsubscribePush = memory.on('push', (event: MemoryPushEvent) => {
+      console.log(`🧠 PUSH: Added item ${event.item.id} \n Memory contents ${JSON.stringify(event.item.data)} \n Total: ${event.total}`);
+    });
+    
 
     eventEmitter.subscribe('file.write', {
       update: (event) => {
@@ -209,6 +216,8 @@ async function runSmithWeatherDemo() {
     console.log(`Iterations: ${result.iterations}`);
     console.log(`Messages: ${result.messages.length}`);
     
+    unsubscribePush();
+
     if (result.completed) {
 
       console.log('✅ Switch demo completed successful!');   

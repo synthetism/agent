@@ -285,7 +285,8 @@ export class Switch extends Unit<SwitchProps> {
     const switchMemory: ChatMessage[] = [
       { role: 'system', content: this.props.identity.systemPrompt }
     ];
-
+        
+    this.props.memory.push(switchMemory);
 
     try {
       // STEP 1: Entry call - get task breakdown
@@ -375,7 +376,7 @@ export class Switch extends Unit<SwitchProps> {
         content: analysisPrompt
       });
 
-      const messages = this.props.memory.list();
+      const messages = this.props.memory.getChatMessages();
 
        const analysis = await this.props.ai.chat(messages);
 
@@ -427,7 +428,12 @@ export class Switch extends Unit<SwitchProps> {
     return execution;
   }
 
-
+  /**
+   * Get memory items as ChatMessages for AI consumption
+   */
+  getMemory(): Memory {
+    return this.props.memory;
+  }
 
   /**
    * Exit call - Smith generates final report based on message history

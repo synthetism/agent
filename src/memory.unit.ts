@@ -35,12 +35,13 @@ import {
   Validator as ValidatorClass 
 } from '@synet/unit';
 import { EventEmitter } from 'node:events';
+import type { ChatMessage } from '@synet/ai';
 
 
 // Generic memory item type
-interface MemoryItem<T = unknown> {
+interface MemoryItem {
   id: string;
-  data: T;
+  data: ChatMessage;
   timestamp: string;
   type?: string;
 }
@@ -118,7 +119,8 @@ export class Memory extends Unit<MemoryProps> {
   protected build(): UnitCore {
     const capabilities = CapabilitiesClass.create(this.dna.id, {
       list: (...args: unknown[]) => this.list(),
-      recall: (...args: unknown[]) => this.recall(args[0] as string),   
+      recall: (...args: unknown[]) => this.recall(args[0] as string),
+      getChatMessages: (...args: unknown[]) => this.getChatMessages(),
     });
 
     const schema = SchemaClass.create(this.dna.id, {
@@ -137,6 +139,12 @@ export class Memory extends Unit<MemoryProps> {
       list: {
         name: 'list',
         description: 'Get all memory items',
+        parameters: { type: 'object', properties: {} },
+        response: { type: 'array' }
+      },
+      getChatMessages: {
+        name: 'getChatMessages',
+        description: 'Get memory items as ChatMessages for AI consumption',
         parameters: { type: 'object', properties: {} },
         response: { type: 'array' }
       }
@@ -340,6 +348,30 @@ export class Memory extends Unit<MemoryProps> {
     }
 
     return count;
+  }
+
+  /**
+   * Get memory items as ChatMessages for AI consumption
+   * Filters and converts MemoryItems that contain ChatMessage data
+   */
+  getChatMessages(): ChatMessage[] {
+    return this.props.items
+      .filter(item => this.isValidChatMessage(item.data))
+      .map(item => item.data as ChatMessage);
+  }
+
+  /**
+   * Check if a memory item contains valid ChatMessage data
+   */
+  private isValidChatMessage(data: unknown): data is ChatMessage {
+    return (
+      typeof data === 'object' &&
+      data !== null &&
+      'role' in data &&
+      'content' in data &&
+      typeof (data as Record<string, unknown>).role === 'string' &&
+      typeof (data as Record<string, unknown>).content === 'string'
+    );
   }
 
   /**
