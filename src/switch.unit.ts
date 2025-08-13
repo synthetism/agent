@@ -15,10 +15,18 @@ import { Unit, createUnitSchema, } from '@synet/unit';
 import type { Capabilities, Schema, Validator, UnitCore, UnitProps, TeachingContract } from '@synet/unit';
 import { Capabilities as CapabilitiesClass, Schema as SchemaClass, Validator as ValidatorClass } from '@synet/unit';
 import type { AIResponse, ChatMessage } from '@synet/ai';
+import { Memory } from './memory.unit'
+
 import type { AIOperator } from '@synet/ai';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { AgentInstructions, AgentTemplate, Templates, TemplateVariables } from "./types/agent.types"
+import type { 
+  AgentInstructions, 
+  AgentTemplate, 
+  Templates, 
+  TemplateVariables,
+  AgentEvent
+} from "./types/agent.types"
 
 
 /* 
@@ -63,13 +71,10 @@ const VERSION = '1.0.0';
 // TYPES
 // =============================================================================
 
-interface SmithIdentity {
+interface SwitchIdentity {
   name: string;
   description: string;
-  objective: string;
-  promptTemplate: string;
-  systemPrompt: string;
-  workerPrompt: string;
+  systemPrompt: string; 
   missionStrategy: {
     analysis: string;
     toolSelection: string;
@@ -84,7 +89,7 @@ interface SmithIdentity {
   };
 }
 
-interface SmithConfig {
+interface SwitchConfig {
   ai: AIOperator;
   agent?: AIOperator
   identityPath?: string;
@@ -92,12 +97,13 @@ interface SmithConfig {
   templateInstructions: AgentInstructions; // Parsed template object, not file path
 }
 
-interface SmithProps extends UnitProps {
+interface SwitchProps extends UnitProps {
   ai: AIOperator;
-  identity: SmithIdentity;
+  identity: SwitchIdentity;
   maxIterations: number;
-  fsEventMemory: string[]; // Store filesystem events for awareness
+  eventMemory: AgentEvent[]; // Store structured events for awareness
   templateInstructions: AgentInstructions; // Parsed template object
+  memory: Memory;
 }
 
 interface SmithExecution {
@@ -112,9 +118,9 @@ interface SmithExecution {
 // Switch UNIT
 // =============================================================================
 
-export class Switch extends Unit<SmithProps> {
-  
-  protected constructor(props: SmithProps) {
+export class Switch extends Unit<SwitchProps> {
+
+  protected constructor(props: SwitchProps) {
     super(props);
   }
 
@@ -147,13 +153,13 @@ export class Switch extends Unit<SmithProps> {
   // FACTORY METHOD
   // =============================================================================
 
-  static create(config: SmithConfig): Switch {
-    // Load Smith's identity configuration
-    const identityPath = config.identityPath || path.join(__dirname, '..', 'config', 'smith.json');
-    const identity: SmithIdentity = JSON.parse(readFileSync(identityPath, 'utf-8'));
+  static create(config: SwitchConfig): Switch {
+    // Load Switch's identity configuration
+    const identityPath = config.identityPath || path.join(__dirname, '..', 'config', 'switch.json');
+    const identity: SwitchIdentity = JSON.parse(readFileSync(identityPath, 'utf-8'));
 
     // No file parsing here - template instructions come pre-parsed from outside
-    const props: SmithProps = {
+    const props: SwitchProps = {
       dna: {
         id: 'switch',
         version: VERSION,
@@ -162,8 +168,9 @@ export class Switch extends Unit<SmithProps> {
       ai: config.ai,
       identity,
       maxIterations: config.maxIterations || 10,
-      fsEventMemory: [], // Initialize filesystem event memory
-      templateInstructions: config.templateInstructions // Pre-parsed object
+      eventMemory: [], 
+      templateInstructions: config.templateInstructions,
+      memory: Memory.create()
     };
 
     return new Switch(props);
@@ -173,84 +180,52 @@ export class Switch extends Unit<SmithProps> {
   // FILESYSTEM EVENT AWARENESS
   // =============================================================================
 
-  /**
-   * Subscribe to filesystem events to maintain awareness of operations
-   */
-  subscribeToFileSystemEvents(eventEmitter: any): void {
-    console.log(`🕶️  [${this.dna.id}] Subscribing to filesystem events for operational awareness...`);
-    
-    // Subscribe to file write events
-    eventEmitter.subscribe('file.write', {
-      update: (event: any) => {
-        const { type, data } = event;
-        const eventLog = data.error 
-          ? `❌ FS-ERROR: ${data.operation} failed on ${data.filePath} - ${data.error.message}`
-          : `✅ FS-SUCCESS: ${data.operation} completed on ${data.filePath} (${data.result} bytes)`;
-        
-        // Add to Smith's filesystem event memory
-        this.props.fsEventMemory.push(eventLog);
-        
-        // Keep only last 10 events to avoid memory bloat
-        if (this.props.fsEventMemory.length > 10) {
-          this.props.fsEventMemory = this.props.fsEventMemory.slice(-10);
-        }
-        
-        console.log(`🧠 [${this.dna.id}] Filesystem Event Recorded: ${eventLog}`);
+   /**
+    * Subscribe to filesystem events to maintain awareness of operations
+    */
+   addEvent(event: AgentEvent): void {
+      // Ensure timestamp if not provided
+      if (!event.timestamp) {
+        event.timestamp = new Date().toISOString();
       }
-    });
-
-    // Subscribe to other filesystem events if needed
-    eventEmitter.subscribe('file.read', {
-      update: (event: any) => {
-        const { type, data } = event;
-        const eventLog = data.error 
-          ? `❌ FS-ERROR: read failed on ${data.filePath} - ${data.error.message}`
-          : `📖 FS-READ: successfully read ${data.filePath}`;
-        
-        this.props.fsEventMemory.push(eventLog);
-        if (this.props.fsEventMemory.length > 10) {
-          this.props.fsEventMemory = this.props.fsEventMemory.slice(-10);
-        }
+      
+      this.props.eventMemory.push(event);
+      
+      // Keep only last 10 events to prevent memory bloat
+      if (this.props.eventMemory.length > 10) {
+        this.props.eventMemory = this.props.eventMemory.slice(-10);
       }
-    });
-  }
-
-  /**
-   * Get current filesystem event context for worker prompts
-   */
-  getFileSystemContext(): string {
-    if (this.props.fsEventMemory.length === 0) {
-      return "No systems events.";
-    }
-    
-    return `Recent events:\n${this.props.fsEventMemory.join('\n')}`;
-  }
-
-  /**
-   * Check for recent filesystem errors that need immediate attention
-   */
-  hasRecentFileSystemErrors(): boolean {
-    return this.props.fsEventMemory.some(event => event.includes('❌ FS-ERROR'));
-  }
-
-  /**
-   * Get the most recent filesystem error for analysis
-   */
-  getLastFileSystemError(): string | null {
-    for (let i = this.props.fsEventMemory.length - 1; i >= 0; i--) {
-      if (this.props.fsEventMemory[i].includes('❌ FS-ERROR')) {
-        return this.props.fsEventMemory[i];
-      }
-    }
-    return null;
-  }
+   }
 
     getLastEvent(): string | null {
-  
-     return this.props.fsEventMemory[this.props.fsEventMemory.length - 1] || null;
-   
- 
-   }
+      const lastEvent = this.props.eventMemory[this.props.eventMemory.length - 1];
+      if (!lastEvent) return null;
+      
+      // Serialize for agent context
+      return `Event: ${lastEvent.type}\nMessage: ${lastEvent.message}\nTimestamp: ${lastEvent.timestamp}`;
+    }
+
+    /**
+     * Get structured events context for AI analysis
+     */
+    getEventsContext(): string {
+      if (this.props.eventMemory.length === 0) {
+        return "No events detected.";
+      }
+      
+      // Return recent events as structured JSON
+      const recentEvents = this.props.eventMemory.slice(-5); // Last 5 events
+      return JSON.stringify(recentEvents, null, 2);
+    }
+
+    /**
+     * Check if there are recent error events
+     */
+    hasRecentErrors(): boolean {
+      return this.props.eventMemory.some(event => 
+        event.type.includes('error') || event.message.toLowerCase().includes('error')
+      );
+    }
 
   // =============================================================================
   // TEMPLATE SYSTEM (Template-driven prompts)
@@ -297,7 +272,7 @@ export class Switch extends Unit<SmithProps> {
    * 5. Exit call - Smith reports final result
    */
   async run(task: string): Promise<SmithExecution> {
-    console.log(`🕶️  [${this.props.identity.name}] Mission received: ${task}`);
+    console.log(`[${this.props.identity.name}] Mission received: ${task}`);
     
     const execution: SmithExecution = {
       goal: task,
@@ -331,10 +306,12 @@ export class Switch extends Unit<SmithProps> {
 
       console.log(`[${this.props.dna.id}] Task breakdown:\n${taskBreakdown.content}`);
       
-      switchMemory.push({
+      this.props.memory.push({
         role: 'user',
         content: taskPrompt
-      }, {
+      });
+
+      this.props.memory.push({
         role: 'assistant', 
         content: taskBreakdown.content
       });
@@ -345,9 +322,7 @@ export class Switch extends Unit<SmithProps> {
         console.log(`[Switch] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
         // Generate next specific prompt using template and full memory context
-        const promptTemplate = this.renderTemplate('workerPromptGeneration', {
-                promptTemplate: this.props.identity.promptTemplate
-        })
+        const promptTemplate = this.renderTemplate('workerPromptGeneration',{})
            
         // Switch thinks about next step (internal reasoning)
         const nextStepResponse = await this.props.ai.chat([
@@ -358,9 +333,9 @@ export class Switch extends Unit<SmithProps> {
         console.log(`[${this.props.dna.id}] Planning next step: ${nextStepResponse.content}`);
         
         // Add Switch's planning to memory as assistant reasoning
-        switchMemory.push({
+        this.props.memory.push({
           role: 'assistant',
-          content: `Planning: ${nextStepResponse.content}`
+          content: `Call tool: ${nextStepResponse.content}`
         });
 
         // Switch executes the planned action with tools
@@ -369,7 +344,7 @@ export class Switch extends Unit<SmithProps> {
 
  
          // Add Switch's action result to memory
-        switchMemory.push({
+        this.props.memory.push({
           role: 'assistant',
           content: response.content
         });
@@ -395,16 +370,18 @@ export class Switch extends Unit<SmithProps> {
       systemEvents: lastEvent || 'No events detected',
     });
   
-      switchMemory.push({
+      this.props.memory.push<ChatMessage>({
         role: 'user',
         content: analysisPrompt
       });
 
-       const analysis = await this.props.ai.chat(switchMemory);
+      const messages = this.props.memory.list();
+
+       const analysis = await this.props.ai.chat(messages);
 
        // Remove analysis request from memory
-       switchMemory.pop();
-      
+       this.props.memory.pop();
+
        const result = analysis.content.toLowerCase().trim();
        const analysisResult =  result.includes('completed') || result.includes('failed') ? 'completed' : 'next_task';
 
@@ -434,11 +411,12 @@ export class Switch extends Unit<SmithProps> {
         console.log(`[${this.props.dna.id}] Final report: ${finalReport}`);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+
       console.error(`❌ [${this.props.dna.id}] Execution error:`, error);
       switchMemory.push({
         role: 'user',
-        content: `Error occurred: ${error?.message || error}. ${this.props.identity.errorRecovery.fallbackStrategy}`
+        content: `Error occurred: ${error instanceof Error ? error.message : String(error)}. ${this.props.identity.errorRecovery.fallbackStrategy}`
       });
     }
 
@@ -450,32 +428,6 @@ export class Switch extends Unit<SmithProps> {
   }
 
 
-  /**
-   * Analyze result - determine if step completed or next task needed
-   */
-  private async analyzeResult(switchMemory: ChatMessage[], response: string): Promise<'completed' | 'next_task'> {
-    
-    const lastEvent = this.getLastEvent();
-    
-
-    const analysisPrompt = this.renderTemplate('resultAnalysis', {
-        workerResponse: response,
-        systemEvents: lastEvent || 'No events detected',
-    });
-  
-    switchMemory.push({
-      role: 'user',
-      content: analysisPrompt
-    });
-
-    const analysis = await this.props.ai.chat(switchMemory);
-
-    // Remove analysis request from memory
-    switchMemory.pop();
-    
-    const result = analysis.content.toLowerCase().trim();
-    return result.includes('completed') ? 'completed' : 'next_task';
-  }
 
   /**
    * Exit call - Smith generates final report based on message history
@@ -501,58 +453,6 @@ export class Switch extends Unit<SmithProps> {
   async chat(messages: ChatMessage[]): Promise<AIResponse> {
     const response = await this.props.ai.chat(messages);
     return response;
-  }
-
-  /**
-   * Smith asks his AI to generate the next prompt for the worker AI
-   * Using promptTemplate as foundation with AI filling in the details
-   */
-  private async generateNextWorkerPrompt(switchMemory: ChatMessage[], originalTask: string): Promise<string> {
-  
-    // Get current filesystem event context
-    //const fsContext = this.getFileSystemContext();
-    
-    // Smith asks his AI to structure the prompt using the template
-    const promptGenerationRequest = `
-Your goal is to generate the next prompt for your AI assistant. 
-
-Use following prompt as a guidance:
-"${this.props.identity.promptTemplate}"
-
-
-INSTRUCTIONS:
-1. Analyze what has been completed vs what still needs to be done
-2. You will receive events related to filesystem operations, in case of failure, instruct assistant to correct the arguments.
-3. Identify the NEXT SINGLE TOOL that needs to be used
-4. Use the template above, filling in:
-   - %%task%% = the specific single task for the worker
-   - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
-   - %%goal%% = what the worker should achieve with this tool
-   - %%context%% = include filesystem operation context if relevant
- 
-CONSTRAINTS:
-- ONE tool call only. Some tools can be executed concurrently if instructed, but default in sequential.
-- Do NOT repeat completed actions (check filesystem events for success/failures)
-- Provide context so worker follows the workflow, including any filesystem operation results
-- Be specific about tool parameters needed and provide instructions.
-- Use only tools from the list provided.
-- If filesystem errors occurred, address them in the next task
-
-Generate the worker prompt using the template format with ALL variables filled in.
-`;
-
-    switchMemory.push({
-      role: 'user',
-      content: promptGenerationRequest
-    });
-
-    // Smith uses his AI to generate the prompt
-    const promptResponse = await this.props.ai.chat(switchMemory);
-    
-    // Remove the prompt generation request from memory (Smith's internal thinking)
-    switchMemory.pop();
-    
-    return promptResponse.content;
   }
 
   /**
@@ -588,20 +488,19 @@ Generate the worker prompt using the template format with ALL variables filled i
 ${this.props.identity.name} - AI Agent - Mission Orchestrator
 
 IDENTITY: ${this.props.identity.description}
-OBJECTIVE: ${this.props.identity.objective}
 
 USAGE:
-  const smith = Switch.create({ ai });
-  smith.learn([fs.teach(), weather.teach()]);
+  const switch = Switch.create({ ai });
+  switch.learn([fs.teach(), weather.teach()]);
 
-  const result = await switch.executeMission("Get weather and save report");
+  const result = await switch.run("Get weather and save report");
 
 METHODS:
-  • executeMission(task) - Execute a mission using worker AI orchestration
-  • learn(contracts) - Learn tools from other units
+  • run(task) - Execute a mission using worker AI orchestration
+  • learn(contracts) - Learn tools and schemas from other units
   • whoami() - Show Switch's identity
 
-LEARNED TOOLS: ${this.capabilities().list().join(', ') || 'None'}
+ LEARNED TOOLS: ${this.capabilities().list().join(', ') || 'None'}
 
 COMPLETION SIGNALS: ${this.props.identity.completionSignals.join(', ')}
     `;

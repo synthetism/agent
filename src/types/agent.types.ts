@@ -1,6 +1,11 @@
 /**
  * Simple Generic Agent Types
- * Focus: Template-based agent with event awareness
+ * Focus: Template-ba// Simple generic event
+export interface AgentEvent{
+  type: string;
+  message: string;
+  timestamp?: string;
+}ent with event awareness
  * No YAGNI interfaces - just what we need for the demo
  */
 
@@ -54,11 +59,10 @@ export interface AgentConfig {
 }
 
 // Simple generic event
-export interface AgentEvent<T = unknown> {
+export interface AgentEvent{
   type: string;
-  data: T;
-  source: string;
-  timestamp: Date;
+  message: string;
+  timestamp: string;
 }
 
 // Simple agent result

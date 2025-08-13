@@ -13,7 +13,7 @@ import path from 'node:path';
 import { AI, AIOperator } from '@synet/ai';
 import { Switch } from '../src/switch.unit.js';
 import { WeatherUnit } from '../src/tools/weather.unit.js';
-import { NodeFileSystem, ObservableFileSystem } from '@synet/fs/promises';
+import { NodeFileSystem, ObservableFileSystem, FilesystemEvent } from '@synet/fs/promises';
 import { createAIFileSystem } from '@synet/fs-ai';
 import { AsyncFileSystem } from "@synet/fs";
 import { Weather, OpenWeather2 } from "@synet/weather"
@@ -24,11 +24,11 @@ import { Crypto } from "@synet/crypto"
 
 
 async function runSmithWeatherDemo() {
-  console.log('🕶️  Agent Smith Weather Demo');
+  console.log('Switch Simple Weather Demo');
   console.log('===============================\n');
   
-  const provider = 'deepseek';
-  const model = 'deepseek-chat';
+  const provider = 'openai';
+  const model = 'gpt-5';
 
 
   try {
@@ -49,13 +49,17 @@ async function runSmithWeatherDemo() {
     console.log('✅ API keys and templates loaded');
     console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
 
+    const credentialsPath = path.join(process.cwd(), "private", "smtp.json");
+    const credentialsData = readFileSync(credentialsPath, "utf-8");
+    const emailCConfig = JSON.parse(credentialsData);
+
     // Step 2: Create tools first
-    console.log('🛠️  Creating tools...');
+    /* console.log('🛠️  Creating tools...');
      const weather = WeatherUnit.create({
       apiKey: weatherConfig.apiKey
-    }); 
+    });  */
 
-   /*  const openweather  = new OpenWeather2({ 
+   const openweather  = new OpenWeather2({ 
       apiKey:weatherConfig.apiKey,
       timeout: 10000 
     });
@@ -64,7 +68,7 @@ async function runSmithWeatherDemo() {
     const weather = Weather.create({
       provider:openweather,
       defaultUnits: 'metric'
-    }); */
+    }); 
 
  
     // Step 3: Setup AI-safe filesystem with event monitoring (like ai-demo-fs)
@@ -85,18 +89,7 @@ async function runSmithWeatherDemo() {
     const eventEmitter = observableFs.getEventEmitter();
     console.log(' Setting up filesystem event monitoring...');
     
-    eventEmitter.subscribe('file.write', {
-      update: (event) => {
-        const { type, data } = event;
-        if (data.error) {
-          console.log(`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
-        } else {
-          console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
-        }
-      }
-    });
+ 
 
     // Create the AsyncFileSystem unit
     const fs = AsyncFileSystem.create({ adapter: observableFs });
@@ -133,10 +126,69 @@ async function runSmithWeatherDemo() {
     console.log('✅', switchUnit.whoami());
     console.log('🎯 Switch now has template-driven task breakdown capability');
 
-    // Step 6: Subscribe Switch to filesystem events for operational awareness
-    console.log('🔗 Connecting Switch to filesystem event stream...');
-    switchUnit.subscribeToEvents(eventEmitter);
-    console.log('✅ Switch is now filesystem-aware\n');
+    eventEmitter.subscribe('file.write', {
+      update: (event) => {
+        const { type, data } = event;
+        if (data.error) {
+
+          switchUnit.addEvent({
+                type: type,
+                message:`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`,
+                timestamp: new Date().toISOString(),
+
+          });
+
+          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);      
+          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+        } else {
+
+           switchUnit.addEvent({
+                type: type,
+                message:`🟢 [FS-EVENT] ${type} - SUCCESS `,
+                timestamp: new Date().toISOString(),
+
+          });
+
+          console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
+          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
+      
+
+        }
+      }
+    });
+
+      eventEmitter.subscribe('file.ensureDir', {
+      update: (event) => {
+        const { type, data } = event;
+        if (data.error) {
+
+          switchUnit.addEvent({
+                type: type,
+                message:`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`,
+                timestamp: new Date().toISOString(),
+
+          });
+
+          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);      
+          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+        } else {
+
+           switchUnit.addEvent({
+                type: type,
+                message:`🟢 [FS-EVENT] ${type} - SUCCESS `,
+                timestamp: new Date().toISOString(),
+
+          });
+
+          console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
+          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
+      
+
+        }
+      }
+    });
+
+
     
     console.log('🧠 Teaching Switch tools (for context)...');
     switchUnit.learn([weather.teach(), fs.teach()]);
@@ -144,30 +196,9 @@ async function runSmithWeatherDemo() {
     console.log();
 
     // Step 7: Smith creative beach destination mission with filesystem awareness
-    console.log('�️  Executing Smith creative beach destination mission...\n');
-    
-    const mission = `
-    
-    Mission: Ultimate Beach Destination Intelligence
+    console.log('🤖 Executing Smith creative beach destination mission...\n');
 
-Task: 
-
-You are a luxury travel intelligence analyst. Your mission is to determine location with the best weather experience and provide deliver weather report.
-
-Requirements:
-1. Research weather conditions in diverse coastal locations worldwide. Choose strategically from different regions/hemispheres, but no more than 3 destinations, and find best destinations for travel for wealthy AI entities.
-2. Analyze current weather patterns to identify optimal beach conditions (temperature, wind, visibility)
-3. Generate a comprehensive travel intelligence report with your expert recommendation
-4. Save the complete analysis and recommendation to 'vault/beach-destination-intelligence.md' in professional markdown format
-
-Success Criteria:
-- Weather data from multiple global coastal destinations
-- Strategic analysis of optimal beach conditions
-- Expert travel recommendation with reasoning
-- File is saved and contents is present
-
-Think like a luxury travel consultant with access to real-time weather intelligence. Make this recommendation count!
-`;
+    const mission = 'Find out the weather in New York, ensure `vault` dir exists and save report to \'vault/new-york-weather-report.md\'';
 
     const result = await switchUnit.run(mission);
     
@@ -179,10 +210,13 @@ Think like a luxury travel consultant with access to real-time weather intellige
     console.log(`Messages: ${result.messages.length}`);
     
     if (result.completed) {
-      console.log('✅ Smith beach destination mission successful!');
-      console.log('\n🏖️ Check vault/beach-destination-intelligence.md for the luxury travel recommendation');
+
+      console.log('✅ Switch demo completed successful!');   
+
     } else {
-      console.log('⚠️  Smith beach destination mission incomplete');
+
+      console.log('⚠️  Switch  mission incomplete ');
+
     }
 
   } catch (error) {

@@ -452,11 +452,11 @@ export class Smith extends Unit<SmithProps> {
         console.log(`📋 [Smith] Final report: ${finalReport}`);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ [Smith] Execution error:', error);
       smithMemory.push({
         role: 'user',
-        content: `Error occurred: ${error?.message || error}. ${this.props.identity.errorRecovery.fallbackStrategy}`
+        content: `Error occurred: ${error instanceof Error ? error.message : String(error)}. ${this.props.identity.errorRecovery.fallbackStrategy}`
       });
     }
 
