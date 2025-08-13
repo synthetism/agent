@@ -202,11 +202,7 @@ async function runSmithWeatherDemo() {
     console.log('✅', switchUnit.whoami());
     console.log();
 
-    // Step 7: Smith creative beach destination mission with filesystem awareness
-    console.log('🤖 Executing Smith creative beach destination mission...\n');
-
     const mission = 'Find out the weather in New York, ensure `vault` dir exists and save report to \'vault/new-york-weather-report.md\'';
-
     const result = await switchUnit.run(mission);
     
     console.log('\n📊 Mission Summary:');

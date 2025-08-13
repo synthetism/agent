@@ -75,6 +75,7 @@ interface SwitchIdentity {
   name: string;
   description: string;
   systemPrompt: string; 
+  promptTemplate: string;
   missionStrategy: {
     analysis: string;
     toolSelection: string;
@@ -176,88 +177,7 @@ export class Switch extends Unit<SwitchProps> {
     return new Switch(props);
   }
 
-  // =============================================================================
-  // FILESYSTEM EVENT AWARENESS
-  // =============================================================================
 
-   /**
-    * Subscribe to filesystem events to maintain awareness of operations
-    */
-   addEvent(event: AgentEvent): void {
-      // Ensure timestamp if not provided
-      if (!event.timestamp) {
-        event.timestamp = new Date().toISOString();
-      }
-      
-      this.props.eventMemory.push(event);
-      
-      // Keep only last 10 events to prevent memory bloat
-      if (this.props.eventMemory.length > 10) {
-        this.props.eventMemory = this.props.eventMemory.slice(-10);
-      }
-   }
-
-    getLastEvent(): string | null {
-      const lastEvent = this.props.eventMemory[this.props.eventMemory.length - 1];
-      if (!lastEvent) return null;
-      
-      // Serialize for agent context
-      return `Event: ${lastEvent.type}\nMessage: ${lastEvent.message}\nTimestamp: ${lastEvent.timestamp}`;
-    }
-
-    /**
-     * Get structured events context for AI analysis
-     */
-    getEventsContext(): string {
-      if (this.props.eventMemory.length === 0) {
-        return "No events detected.";
-      }
-      
-      // Return recent events as structured JSON
-      const recentEvents = this.props.eventMemory.slice(-5); // Last 5 events
-      return JSON.stringify(recentEvents, null, 2);
-    }
-
-    /**
-     * Check if there are recent error events
-     */
-    hasRecentErrors(): boolean {
-      return this.props.eventMemory.some(event => 
-        event.type.includes('error') || event.message.toLowerCase().includes('error')
-      );
-    }
-
-  // =============================================================================
-  // TEMPLATE SYSTEM (Template-driven prompts)
-  // =============================================================================
-
-  /**
-   * Render template with variables (do one thing well)
-   */
-  private renderTemplate(templateName: Templates, variables: TemplateVariables): string {
-    if (!this.props.templateInstructions?.templates?.[templateName]) {
-      throw new Error(`Template '${templateName}' not found in template instructions`);
-    }
-
-    const template = this.getTemplate(templateName);
-    const rendered =  SimpleTemplateEngine.render(template.prompt, variables);
-
-   if(templateName ==='resultAnalysis') {
-        console.log('Rendered result analysis template:', rendered);
-    }
-
-    return rendered;
-    
-
-  }
-
-  private getTemplate(templateName: Templates): AgentTemplate {
-    const template = this.props.templateInstructions.templates[templateName];
-    if (!template) {
-      throw new Error(`Template '${templateName}' not found in template instructions`);
-    }
-    return template;
-  }
 
   // =============================================================================
   // CORE EXECUTION
@@ -291,8 +211,7 @@ export class Switch extends Unit<SwitchProps> {
     try {
       // STEP 1: Entry call - get task breakdown
       console.log(`[${this.props.dna.id}] Breaking down mission into steps...`);
-      console.log('Switch capabilities ', this.capabilities().list());
-      
+
       const taskPrompt = this.renderTemplate('taskBreakdown', {
         task,
         tools: this.capabilities().list().join(', ') || 'No tools available',
@@ -300,7 +219,7 @@ export class Switch extends Unit<SwitchProps> {
 
 
       const taskBreakdown = await this.props.ai.chat([
-        { role: 'system', content: this.props.templateInstructions.templates.taskBreakdown.prompt.system },
+        { role: 'system', content: this.props.identity.missionStrategy.analysis},
         { role: 'user', content: taskPrompt }
       ]);
 
@@ -322,21 +241,23 @@ export class Switch extends Unit<SwitchProps> {
         console.log(`[Switch] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
         // Generate next specific prompt using template and full memory context
-        const promptTemplate = this.renderTemplate('workerPromptGeneration',{});
+        const promptTemplate = this.renderTemplate('workerPromptGeneration',{
+            promptTemplate: this.props.identity.promptTemplate,
+        });
 
         // Switch thinks about next step (internal reasoning)
         const nextStepResponse = await this.props.ai.chat([
-          ...this.props.memory.getMessages(),
+          { role: 'system', content: this.props.identity.missionStrategy.promptGeneration },
           { role: 'user', content: promptTemplate }
         ]);
         
         console.log(`[${this.props.dna.id}] Planning next step: ${nextStepResponse.content}`);
         
         // Add Switch's planning to memory as assistant reasoning
-        this.props.memory.push({
+         this.props.memory.push({
           role: 'assistant',
           content: `${nextStepResponse.content}`
-        });
+        }); 
 
         // Switch executes the planned action with tools
         const response = await this.props.ai.chatWithTools(this.props.memory.getMessages());
@@ -426,12 +347,6 @@ export class Switch extends Unit<SwitchProps> {
     return execution;
   }
 
-  /**
-   * Get memory items as ChatMessages for AI consumption
-   */
-  getMemory(): Memory {
-    return this.props.memory;
-  }
 
   /**
    * Exit call - Smith generates final report based on message history
@@ -458,6 +373,87 @@ export class Switch extends Unit<SwitchProps> {
     const response = await this.props.ai.chat(messages);
     return response;
   }
+   /**
+    * Subscribe to filesystem events to maintain awareness of operations
+    */
+   addEvent(event: AgentEvent): void {
+      // Ensure timestamp if not provided
+      if (!event.timestamp) {
+        event.timestamp = new Date().toISOString();
+      }
+      
+      this.props.eventMemory.push(event);
+      
+      // Keep only last 10 events to prevent memory bloat
+      if (this.props.eventMemory.length > 10) {
+        this.props.eventMemory = this.props.eventMemory.slice(-10);
+      }
+   }
+
+    getLastEvent(): string | null {
+      const lastEvent = this.props.eventMemory[this.props.eventMemory.length - 1];
+      if (!lastEvent) return null;
+      
+      // Serialize for agent context
+      return `Event: ${lastEvent.type}\nMessage: ${lastEvent.message}\nTimestamp: ${lastEvent.timestamp}`;
+    }
+
+    /**
+     * Get structured events context for AI analysis
+     */
+    getEventsContext(): string {
+      if (this.props.eventMemory.length === 0) {
+        return "No events detected.";
+      }
+      
+      // Return recent events as structured JSON
+      const recentEvents = this.props.eventMemory.slice(-5); // Last 5 events
+      return JSON.stringify(recentEvents, null, 2);
+    }
+
+    /**
+     * Check if there are recent error events
+     */
+    hasRecentErrors(): boolean {
+      return this.props.eventMemory.some(event => 
+        event.type.includes('error') || event.message.toLowerCase().includes('error')
+      );
+    }
+
+  // =============================================================================
+  // TEMPLATE SYSTEM (Template-driven prompts)
+  // =============================================================================
+
+  /**
+   * Render template with variables (do one thing well)
+   */
+  private renderTemplate(templateName: Templates, variables: TemplateVariables): string {
+    if (!this.props.templateInstructions?.templates?.[templateName]) {
+      throw new Error(`Template '${templateName}' not found in template instructions`);
+    }
+
+    const template = this.getTemplate(templateName);
+    const rendered =  SimpleTemplateEngine.render(template.prompt, variables);
+
+    return rendered;
+    
+
+  }
+
+  private getTemplate(templateName: Templates): AgentTemplate {
+    const template = this.props.templateInstructions.templates[templateName];
+    if (!template) {
+      throw new Error(`Template '${templateName}' not found in template instructions`);
+    }
+    return template;
+  }
+  /**
+   * Get memory items as ChatMessages for AI consumption
+   */
+  getMemory(): Memory {
+    return this.props.memory;
+  }
+
 
   /**
    * Smith learns tools from other units but doesn't teach (like @synet/ai)
