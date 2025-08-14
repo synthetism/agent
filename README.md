@@ -1,6 +1,6 @@
 # @synet/agent
 
-**Stop building broken AI agents.** Two battle-tested patterns that actually work, learn any tool, execute any mission.
+**AI agents that work on the first try.** Two proven patterns, learn any tool, execute reliably.
 
 ```typescript
 import { Smith, Switch } from '@synet/agent';
@@ -16,16 +16,21 @@ smith.learn([weather.teach(), calendar.teach(), email.teach()]);
 await smith.run("Plan my week based on weather, schedule meetings, send confirmations");
 ```
 
-## Why This Exists
+## The Problem
 
-You've been there:
-- AI agents that work in demos but break in production
-- Endless boilerplate for tool management and error handling
-- Agents that refuse to call tools, breaking your carefully crafted prompts
-- Different results every run, impossible to debug or stabilize
-- Memory management nightmares and token consumption spirals
+Building AI agents feels like Groundhog Day:
+- Write agent logic → test → fails mysteriously → debug → repeat
+- Weeks spent on boilerplate: tool management, prompt engineering, error handling
+- Every model behaves differently, breaking your carefully tuned workflows  
+- Token costs spiral while you debug why the agent won't call tools
+- Memory management becomes a game of prompt tetris
 
-**This solves it.** Two proven patterns, minimal setup, maximum reliability.
+Building reliable agentic flows becomes an endless loop of try-and-error and gigantic time-sink, without bright light of progress. 
+
+We challenged that and built agents that dont suck, so you don't have to. 
+
+[Why just not use Langchain?](https://www.reddit.com/r/LangChain/comments/1mjq5sm/i_reverseengineered_langchains_actual_usage/) 
+
 
 ```bash
 npm install @synet/agent
@@ -34,7 +39,7 @@ npm install @synet/agent
 ## Two Agent Patterns That Work
 
 ### `Switch`: Fast & Reliable
-They refuse to call tools
+**Single AI, focused execution, handles straightforward tasks consistently.**
 
 ```typescript
 import { Switch } from '@synet/agent';
@@ -190,10 +195,25 @@ memory.on('push', (event) => {
 This approach saves time and tokens.
 
 ### Event System
-**Tools communicate with agents through structured events.**
+**Agents track their own execution and emit events you can monitor.**
 
 ```typescript
-// Events help agents make better decisions
+// Memory events - see what your agent is thinking
+const agent = Switch.create({ ai });
+
+agent.memory.on('push', (event) => {
+  console.log('Agent step:', event.message);
+});
+
+await agent.run("Organize project files and create backup");
+// Logs: "Agent step: Reading directory structure"
+// Logs: "Agent step: Creating backup manifest"
+```
+
+**Tools can also emit events during execution:**
+
+```typescript
+// Tools communicate through events
 agent.on('tool-error', (event) => {
   console.log(`Tool ${event.toolName} failed: ${event.error}`);
 });
@@ -262,28 +282,36 @@ const smith = Smith.create({
 ```
 
 ### Custom Template System
-```typescript
-const templates = {
-  identity: {
-    name: "DataAnalyst",
-    description: "Expert at data processing and visualization",
-    version: "1.0.0"
+**JSON-based templates for easy portability and configuration.**
+
+```json
+{
+  "identity": {
+    "name": "DataAnalyst",
+    "description": "Expert at data processing and visualization",
+    "version": "1.0.0"
   },
-  taskBreakdown: {
-    prompt: {
-      system: "You are an expert data analyst...",
-      user: "Analyze this request: {{mission}}\nAvailable tools: {{tools}}"
+  "taskBreakdown": {
+    "prompt": {
+      "system": "You are an expert data analyst...",
+      "user": "Analyze this request: {{mission}}\nAvailable tools: {{tools}}"
     },
-    variables: ["mission", "tools"]
+    "variables": ["mission", "tools"]
   },
-  workerPrompt: {
-    prompt: {
-      system: "Execute this step precisely...",
-      user: "Step: {{step}}\nContext: {{context}}"
+  "workerPrompt": {
+    "prompt": {
+      "system": "Execute this step precisely...",
+      "user": "Step: {{step}}\nContext: {{context}}"
     },
-    variables: ["step", "context"]
+    "variables": ["step", "context"]
   }
-};
+}
+```
+
+```typescript
+// Load and use JSON templates
+const templates = JSON.parse(fs.readFileSync('./agent-config.json', 'utf-8'));
+const agent = Switch.create({ ai, templates });
 ```
 
 ## Error Handling & Recovery
@@ -299,18 +327,23 @@ try {
 }
 ```
 
-### Smith: Collaborative Recovery
-```typescript
-// Smith automatically recovers from tool failures
-const result = await smith.run(`
-  Send email to client list
-  If any emails fail, try SMS backup
-  If SMS fails, log for manual follow-up
-`);
+### Smith: Dual AI Coordination
+**Two AIs working together - currently in testing phase.**
 
-// Smith's orchestrator guides recovery strategies
-console.log(`Completed with ${result.recoveredErrors} recovered errors`);
+```typescript
+const smith = Smith.create({
+  ai: claude,          // Worker AI 
+  orchestrator: gpt4   // Planning AI
+});
+
+// Basic execution works
+const result = await smith.run("Analyze weather and suggest meeting changes");
+
+// Error recovery capabilities being tested
+// More sophisticated error handling coming soon
 ```
+
+*Note: Smith's collaborative error recovery is under active development. Current version provides basic dual-AI execution with manual error handling.*
 
 ## Performance & Optimization
 
@@ -406,13 +439,10 @@ For specialized use cases:
 - **Enterprise Template Management** - Centralized template governance
 - **Advanced Event Choreography** - Complex multi-agent coordination
 - **Audit Trail Integration** - Complete mission traceability
+- **SOC, HIPAA, GDPR, PCI** - Agentic compliance and data processing rules.
 
 *Some advanced features available separately. [Contact us](mailto:anton@synthetism.ai) for enterprise licensing.*
 
 ## License
 
 MIT - Automate whatever you want.
-
----
-
-*Stop building broken AI agents. Use patterns that work.*

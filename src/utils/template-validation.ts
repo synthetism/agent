@@ -3,19 +3,31 @@
  * Validates agent instruction JSON structure and required fields
  */
 
-import { AgentInstructions, AgentTemplate } from '../types/agent.types.js';
-import { TEMPLATE_SCHEMAS, ValidationError, ValidationResult } from '../schema/template.schema.js';
+import { type AgentInstructions, AgentTemplate } from '../types/agent.types.js';
+import { TEMPLATE_SCHEMAS, type TemplateSchema, type ValidationError, type ValidationResult } from '../schema/template.schema.js';
 
 export class TemplateValidator {
   
   /**
    * Validate complete agent instructions JSON
    */
-  static validate(instructions: any): ValidationResult {
+  static validate(instructions: unknown): ValidationResult {
     const errors: ValidationError[] = [];
     
+    // Type guard for instructions object
+    if (!instructions || typeof instructions !== 'object') {
+      errors.push({
+        templateName: 'root',
+        field: 'instructions',
+        error: 'Instructions must be an object'
+      });
+      return { valid: false, errors };
+    }
+    
+    const inst = instructions as Record<string, unknown>;
+    
     // Validate top-level structure
-    if (!instructions.name || typeof instructions.name !== 'string') {
+    if (!inst.name || typeof inst.name !== 'string') {
       errors.push({
         templateName: 'root',
         field: 'name',
@@ -23,7 +35,7 @@ export class TemplateValidator {
       });
     }
     
-    if (!instructions.description || typeof instructions.description !== 'string') {
+    if (!inst.description || typeof inst.description !== 'string') {
       errors.push({
         templateName: 'root',
         field: 'description', 
@@ -31,7 +43,7 @@ export class TemplateValidator {
       });
     }
     
-    if (!instructions.version || typeof instructions.version !== 'string') {
+    if (!inst.version || typeof inst.version !== 'string') {
       errors.push({
         templateName: 'root',
         field: 'version',
@@ -39,7 +51,7 @@ export class TemplateValidator {
       });
     }
     
-    if (!instructions.templates || typeof instructions.templates !== 'object') {
+    if (!inst.templates || typeof inst.templates !== 'object') {
       errors.push({
         templateName: 'root',
         field: 'templates',
@@ -48,9 +60,11 @@ export class TemplateValidator {
       return { valid: false, errors };
     }
     
+    const templates = inst.templates as Record<string, unknown>;
+    
     // Validate each required template
     for (const [templateName, schema] of Object.entries(TEMPLATE_SCHEMAS)) {
-      const template = instructions.templates[templateName];
+      const template = templates[templateName];
       
       if (!template) {
         errors.push({
@@ -62,7 +76,7 @@ export class TemplateValidator {
       }
       
       // Validate template structure
-      const templateErrors = this.validateTemplate(templateName, template, schema);
+      const templateErrors = TemplateValidator.validateTemplate(templateName, template, schema);
       errors.push(...templateErrors);
     }
     
@@ -75,11 +89,23 @@ export class TemplateValidator {
   /**
    * Validate individual template structure
    */
-  private static validateTemplate(templateName: string, template: any, schema: any): ValidationError[] {
+  private static validateTemplate(templateName: string, template: unknown, schema: TemplateSchema): ValidationError[] {
     const errors: ValidationError[] = [];
     
+    // Type guard for template object
+    if (!template || typeof template !== 'object') {
+      errors.push({
+        templateName,
+        field: 'template',
+        error: 'Template must be an object'
+      });
+      return errors;
+    }
+    
+    const temp = template as Record<string, unknown>;
+    
     // Validate prompt object exists
-    if (!template.prompt || typeof template.prompt !== 'object') {
+    if (!temp.prompt || typeof temp.prompt !== 'object') {
       errors.push({
         templateName,
         field: 'prompt',
@@ -88,9 +114,11 @@ export class TemplateValidator {
       return errors;
     }
     
+    const prompt = temp.prompt as Record<string, unknown>;
+    
     // Validate required prompt fields (user, system)
     for (const field of schema.requiredPromptFields) {
-      if (!template.prompt[field] || typeof template.prompt[field] !== 'string') {
+      if (!prompt[field] || typeof prompt[field] !== 'string') {
         errors.push({
           templateName,
           field: `prompt.${field}`,
@@ -100,7 +128,7 @@ export class TemplateValidator {
     }
     
     // Validate variables array exists
-    if (!Array.isArray(template.variables)) {
+    if (!Array.isArray(temp.variables)) {
       errors.push({
         templateName,
         field: 'variables',
@@ -109,9 +137,11 @@ export class TemplateValidator {
       return errors;
     }
     
+    const variables = temp.variables as string[];
+    
     // Validate required variables are present
     for (const requiredVar of schema.requiredVariables) {
-      if (!template.variables.includes(requiredVar)) {
+      if (!variables.includes(requiredVar)) {
         errors.push({
           templateName,
           field: 'variables',
@@ -121,12 +151,12 @@ export class TemplateValidator {
     }
     
     // Validate that all variables in template are declared
-    const userPromptVars = this.extractVariablesFromPrompt(template.prompt.user);
-    const systemPromptVars = this.extractVariablesFromPrompt(template.prompt.system);
+    const userPromptVars = TemplateValidator.extractVariablesFromPrompt(prompt.user as string);
+    const systemPromptVars = TemplateValidator.extractVariablesFromPrompt(prompt.system as string);
     const allPromptVars = [...userPromptVars, ...systemPromptVars];
     
     for (const promptVar of allPromptVars) {
-      if (!template.variables.includes(promptVar)) {
+      if (!variables.includes(promptVar)) {
         errors.push({
           templateName,
           field: 'variables',
@@ -146,10 +176,10 @@ export class TemplateValidator {
     const matches = prompt.match(/\{\{(\w+)\}\}/g);
     
     if (matches) {
-      matches.forEach(match => {
+      for (const match of matches) {
         const varName = match.replace(/\{\{|\}\}/g, '');
         variables.add(varName);
-      });
+      }
     }
     
     return Array.from(variables);
@@ -158,8 +188,8 @@ export class TemplateValidator {
   /**
    * Validate and throw if invalid
    */
-  static validateAndThrow(instructions: any): AgentInstructions {
-    const result = this.validate(instructions);
+  static validateAndThrow(instructions: unknown): AgentInstructions {
+    const result = TemplateValidator.validate(instructions);
     
     if (!result.valid) {
       const errorMessages = result.errors.map(err => 
@@ -172,9 +202,4 @@ export class TemplateValidator {
     return instructions as AgentInstructions;
   }
 
-  nonstatic() {
-
-
-  }
-  
 }

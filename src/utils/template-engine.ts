@@ -3,7 +3,7 @@
  * Focus: Basic variable replacement for template-based prompts
  */
 
-import { ChatMessage } from '@synet/ai';
+import type { ChatMessage } from '@synet/ai';
 import type { TemplateVariables } from '../types/agent.types.js';
 import type { AgentEvent } from '../types/agent.types.js';
 export class SimpleTemplateEngine {
