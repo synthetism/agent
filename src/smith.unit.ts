@@ -21,24 +21,6 @@ import path from 'node:path';
 import type { AgentEvent, AgentInstructions, AgentTemplate, Templates, TemplateVariables } from "./types/agent.types"
 
 
-/* 
-// Import the proper type
-interface AgentInstructions {
-  name: string;
-  description: string;
-  version: string;
-  templates: {
-    taskBreakdown: {
-      prompt: { user: string; system: string };
-      variables: string[];
-    };
-    workerPromptGeneration: {
-      prompt: { user: string; system: string };
-      variables: string[];
-    };
-  };
-} */
-
 class SimpleTemplateEngine {
   static render(template: { user: string; system: string }, variables: TemplateVariables): string {
     let rendered = template.user;
@@ -267,7 +249,7 @@ export class Smith extends Unit<SmithProps> {
    * 5. Exit call - Smith reports final result
    */
   async run(task: string): Promise<SmithExecution> {
-    console.log(`🕶️  [${this.props.identity.name}] Mission received: ${task}`);
+    console.log(`[${this.props.identity.name}] Mission received: ${task}`);
     
     const execution: SmithExecution = {
       goal: task,
@@ -288,9 +270,9 @@ export class Smith extends Unit<SmithProps> {
 
     try {
       // STEP 1: Entry call - get task breakdown
-      console.log('[Smith] Breaking down mission into steps...');
-      console.log('Smith capabilities ', this.capabilities().list());
-      
+      console.log(`[${this.props.dna.id}] Breaking down mission into steps...`);
+      console.log(`[${this.props.dna.id}] capabilities `, this.capabilities().list());
+
       const taskPrompt = this.renderTemplate('taskBreakdown', {
         task,
         tools: this.capabilities().list().join(', ') || 'No tools available',
@@ -316,7 +298,7 @@ export class Smith extends Unit<SmithProps> {
       // STEP 2: Execute steps individually
       while (!execution.completed && execution.iterations < this.props.maxIterations) {
         execution.iterations++;
-        console.log(`[Smith] Iteration ${execution.iterations}/${this.props.maxIterations}`);
+        console.log(`[${this.props.dna.id}] Iteration ${execution.iterations}/${this.props.maxIterations}`);
         
         // Generate next specific prompt using template and full memory context
         const promptTemplate = this.renderTemplate('workerPromptGeneration', {
@@ -336,7 +318,7 @@ export class Smith extends Unit<SmithProps> {
         // Remove the prompt generation request from memory (Smith's internal thinking)
         smithMemory.pop();
         
-        console.log(`[Smith] Generated worker prompt: ${workerPrompt}`);
+        console.log(`[${this.props.dna.id}] Generated worker prompt: ${workerPrompt}`);
         
         // Add prompt to worker memory
         workerMemory.push({
@@ -402,7 +384,7 @@ export class Smith extends Unit<SmithProps> {
        const analysisResult =  result.includes('completed') ? 'completed' : 'next_task';
  
 
-        console.log(`🔍 [Smith] Analysis: ${analysisResult}`);
+        console.log(`[${this.props.dna.id}] Analysis: ${analysisResult}`);
         
         if (analysisResult === 'completed') {
           execution.completed = true;
@@ -414,14 +396,14 @@ export class Smith extends Unit<SmithProps> {
 
       // STEP 4: Exit call - final report
       if (execution.completed) {
-        console.log('📊 [Smith] Generating final report...');
+        console.log(`[${this.props.dna.id}] Generating final report...`);
         const finalReport = await this.generateFinalReport(smithMemory);
         execution.result = finalReport;
-        console.log(`📋 [Smith] Final report: ${finalReport}`);
+        console.log(`[${this.props.dna.id}] Final report: ${finalReport}`);
       }
 
     } catch (error: unknown) {
-      console.error('❌ [Smith] Execution error:', error);
+      console.error('❌ [${this.props.dna.id}] Execution error:', error);
       smithMemory.push({
         role: 'user',
         content: `Error occurred: ${error instanceof Error ? error.message : String(error)}. ${this.props.identity.errorRecovery.fallbackStrategy}`
@@ -429,39 +411,12 @@ export class Smith extends Unit<SmithProps> {
     }
 
     if (!execution.completed) {
-      console.log(`⏰ [Smith] Mission timeout after ${this.props.maxIterations} iterations`);
+      console.log(`[${this.props.dna.id}] Mission timeout after ${this.props.maxIterations} iterations`);
     }
 
     return execution;
   }
 
-
-  /**
-   * Analyze result - determine if step completed or next task needed
-   */
-  private async analyzeResult(smithMemory: ChatMessage[], response: string): Promise<'completed' | 'next_task'> {
-    
-    const lastEvent = this.getLastEvent();
-    
-
-    const analysisPrompt = this.renderTemplate('resultAnalysis', {
-        workerResponse: response,
-        systemEvents: lastEvent || 'No events detected',
-    });
-  
-    smithMemory.push({
-      role: 'user',
-      content: analysisPrompt
-    });
-
-    const analysis = await this.props.ai.chat(smithMemory);
-
-    // Remove analysis request from memory
-    smithMemory.pop();
-    
-    const result = analysis.content.toLowerCase().trim();
-    return result.includes('completed') ? 'completed' : 'next_task';
-  }
 
   /**
    * Exit call - Smith generates final report based on message history
@@ -487,58 +442,6 @@ export class Smith extends Unit<SmithProps> {
   async chat(messages: ChatMessage[]): Promise<AIResponse> {
     const response = await this.props.ai.chat(messages);
     return response;
-  }
-
-  /**
-   * Smith asks his AI to generate the next prompt for the worker AI
-   * Using promptTemplate as foundation with AI filling in the details
-   */
-  private async generateNextWorkerPrompt(smithMemory: ChatMessage[], originalTask: string): Promise<string> {
-  
-    // Get current filesystem event context
-    //const fsContext = this.getFileSystemContext();
-    
-    // Smith asks his AI to structure the prompt using the template
-    const promptGenerationRequest = `
-Your goal is to generate the next prompt for your AI assistant. 
-
-Use following prompt as a guidance:
-"${this.props.identity.promptTemplate}"
-
-
-INSTRUCTIONS:
-1. Analyze what has been completed vs what still needs to be done
-2. You will receive events related to filesystem operations, in case of failure, instruct assistant to correct the arguments.
-3. Identify the NEXT SINGLE TOOL that needs to be used
-4. Use the template above, filling in:
-   - %%task%% = the specific single task for the worker
-   - %%tool%% = the exact tool to use (e.g., "weather.getCurrentWeather")  
-   - %%goal%% = what the worker should achieve with this tool
-   - %%context%% = include filesystem operation context if relevant
- 
-CONSTRAINTS:
-- ONE tool call only. Some tools can be executed concurrently if instructed, but default in sequential.
-- Do NOT repeat completed actions (check filesystem events for success/failures)
-- Provide context so worker follows the workflow, including any filesystem operation results
-- Be specific about tool parameters needed and provide instructions.
-- Use only tools from the list provided.
-- If filesystem errors occurred, address them in the next task
-
-Generate the worker prompt using the template format with ALL variables filled in.
-`;
-
-    smithMemory.push({
-      role: 'user',
-      content: promptGenerationRequest
-    });
-
-    // Smith uses his AI to generate the prompt
-    const promptResponse = await this.props.ai.chat(smithMemory);
-    
-    // Remove the prompt generation request from memory (Smith's internal thinking)
-    smithMemory.pop();
-    
-    return promptResponse.content;
   }
 
   /**
@@ -589,7 +492,6 @@ METHODS:
 
 LEARNED TOOLS: ${this.capabilities().list().join(', ') || 'None'}
 
-COMPLETION SIGNALS: ${this.props.identity.completionSignals.join(', ')}
     `;
   }
 

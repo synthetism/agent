@@ -1,8 +1,8 @@
-# AI Operator Tools
+# Agent Tools
 
-**Available Unit Architecture tools for AI integration**
+**Available Unit Architecture tools for AI and Agent integration**
 
-This document lists SYNET packages that can be used as tools with AI units through the teach/learn paradigm.
+This document lists synet packages that can be used as tools with AI units through the teach/learn paradigm.
 
 ## Production Ready Tools
 
@@ -45,19 +45,6 @@ This document lists SYNET packages that can be used as tools with AI units throu
 - **Capabilities**: Enqueue jobs, process tasks, queue management
 - **Use Case**: Background processing, task scheduling, workflow automation
 - **AI Integration**: AI-driven task scheduling and job management
-
-### @synet/rate-limiter
-**Request rate limiting and throttling**
-- **Capabilities**: Rate limiting, burst control, usage tracking
-- **Use Case**: API protection, resource management, traffic control
-- **AI Integration**: AI-managed rate limiting and traffic analysis
-
-### @synet/cache
-**Multi-backend caching system**
-- **Capabilities**: Cache operations, TTL management, memory/Redis backends
-- **Use Case**: Performance optimization, data caching, session storage
-- **AI Integration**: AI-driven cache management and optimization
-
 ## Security Tools
 
 ### @synet/hasher

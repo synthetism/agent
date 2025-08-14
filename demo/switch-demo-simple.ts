@@ -34,7 +34,7 @@ async function runSmithWeatherDemo() {
 
   try {
     // Step 1: Load API keys and template instructions
-    console.log('🔑 Loading API keys and templates...');
+    console.log('Loading API keys and templates...');
     const aiconfig = JSON.parse(
       readFileSync(path.join('private', `${provider}.json`), 'utf-8')
     );
@@ -48,7 +48,7 @@ async function runSmithWeatherDemo() {
       readFileSync(path.join('config', 'switch-instructions.json'), 'utf-8')
     ) as AgentInstructions;
     console.log('✅ API keys and templates loaded');
-    console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
+    console.log(`Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
 
     const credentialsPath = path.join(process.cwd(), "private", "smtp.json");
     const credentialsData = readFileSync(credentialsPath, "utf-8");
@@ -125,7 +125,7 @@ async function runSmithWeatherDemo() {
       templateInstructions // Pass pre-parsed template object
     });
     console.log('✅', switchUnit.whoami());
-    console.log('🎯 Switch now has template-driven task breakdown capability');
+    console.log('Switch now has template-driven task breakdown capability');
 
     const memory = switchUnit.getMemory();
     const unsubscribePush = memory.on('push', (event: MemoryPushEvent) => {
@@ -197,7 +197,7 @@ async function runSmithWeatherDemo() {
 
 
     
-    console.log('🧠 Teaching Switch tools (for context)...');
+    console.log('Teaching Switch tools (for context)...');
     switchUnit.learn([weather.teach(), fs.teach()]);
     console.log('✅', switchUnit.whoami());
     console.log();
@@ -205,7 +205,7 @@ async function runSmithWeatherDemo() {
     const mission = 'Find out the weather in New York, ensure `vault` dir exists and save report to \'vault/new-york-weather-report.md\'';
     const result = await switchUnit.run(mission);
     
-    console.log('\n📊 Mission Summary:');
+    console.log('\nMission Summary:');
     console.log('==================');
     console.log('Goal: Ultimate Beach Destination Intelligence');
     console.log(`Completed: ${result.completed}`);

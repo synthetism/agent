@@ -3,8 +3,9 @@
  * Focus: Basic variable replacement for template-based prompts
  */
 
+import { ChatMessage } from '@synet/ai';
 import type { TemplateVariables } from '../types/agent.types.js';
-
+import type { AgentEvent } from '../types/agent.types.js';
 export class SimpleTemplateEngine {
   
   /**
@@ -42,21 +43,21 @@ export class SimpleTemplateEngine {
   /**
    * Format event context for templates
    */
-  static formatEventContext(events: any[]): string {
+  static formatEventContext(events: AgentEvent[]): string {
     if (events.length === 0) {
       return 'No recent events.';
     }
     
     const recentEvents = events.slice(-5); // Last 5 events
     return recentEvents.map(event => 
-      `[${event.timestamp.toISOString()}] ${event.type}: ${JSON.stringify(event.data)}`
+      `[${event.type}]:  ${event.message}`
     ).join('\n');
   }
   
   /**
    * Format conversation history for templates
    */
-  static formatConversationHistory(messages: any[]): string {
+  static formatConversationHistory(messages: ChatMessage[]): string {
     return messages
       .slice(1) // Skip system message
       .map((msg, i) => `${i + 1}. ${msg.role.toUpperCase()}: ${msg.content}`)

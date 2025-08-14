@@ -20,7 +20,7 @@ import { Weather, OpenWeather2 } from "@synet/weather"
 import type { AgentInstructions} from "../src/types/agent.types.js"
 import { Email } from "@synet/email"
 import { Hasher } from "@synet/hasher"
-import { Crypto } from "@synet/crypto"
+
 
 
 async function runSmithWeatherDemo() {
@@ -49,7 +49,7 @@ async function runSmithWeatherDemo() {
     
     // Parse template instructions outside (lightweight approach)
     const templateInstructions = JSON.parse(
-      readFileSync(path.join('config', 'agent-instructions.json'), 'utf-8')
+      readFileSync(path.join('config', 'smith-instructions.json'), 'utf-8')
     ) as AgentInstructions;
     console.log('✅ API keys and templates loaded');
     console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
@@ -153,11 +153,7 @@ async function runSmithWeatherDemo() {
     console.log('✅', smith.whoami());
     console.log('🎯 Smith now has template-driven task breakdown capability');
     
-    // Step 6: Subscribe Smith to filesystem events for operational awareness
-    console.log('🔗 Connecting Smith to filesystem event stream...');
-    smith.subscribeToFileSystemEvents(eventEmitter);
-    console.log('✅ Smith is now filesystem-aware\n');
-    
+
     console.log('🧠 Teaching Smith tools (for context)...');
     smith.learn([weather.teach(), fs.teach()]);
     console.log('✅', smith.whoami());

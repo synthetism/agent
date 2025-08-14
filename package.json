@@ -1,6 +1,6 @@
 {
   "name": "@synet/agent",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,8 +24,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "demo:switch": "tsx demo/switch-demo.ts",
-    "demo:smith": "tsx demo/smith-demo.ts",
+    "demo:switch": "tsx demo/switch-demo-simple.ts",
+    "demo:smith": "tsx demo/smith-demo-simple.ts",
     "test:watch": "vitest",
     "clean": "rimraf dist",
     "lint": "biome lint ./src",

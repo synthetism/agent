@@ -10,12 +10,13 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { AI, AIOperator } from '@synet/ai';
+import { AIOperator } from '@synet/ai';
 import { Smith } from '../src/smith.unit.js';
 import { WeatherUnit } from '../src/tools/weather.unit.js';
 import { NodeFileSystem, ObservableFileSystem } from '@synet/fs/promises';
 import { createAIFileSystem } from '@synet/fs-ai';
 import { AsyncFileSystem } from "@synet/fs";
+import type { AgentInstructions} from "../src/types/agent.types.js"
 
 async function runSmithWeatherDemo() {
   console.log('🕶️  Agent Smith Weather Demo');
@@ -34,6 +35,15 @@ async function runSmithWeatherDemo() {
       readFileSync(path.join('private', 'openweather.json'), 'utf-8')
     );
     console.log('✅ API keys loaded\n');
+
+
+    const templateInstructions = JSON.parse(
+        readFileSync(path.join('config', 'smith-instructions.json'), 'utf-8')
+      ) as AgentInstructions;
+    console.log('✅ API keys and templates loaded');
+    console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
+        
+    
 
     // Step 2: Create tools first
     console.log('🛠️  Creating tools...');
@@ -94,13 +104,12 @@ async function runSmithWeatherDemo() {
 
     // Step 5: Create Agent Smith with tool-trained AI
     console.log('🕶️  Creating Agent Smith...');
-    const smith = Smith.create({ ai, maxIterations:20 });
+    const smith = Smith.create({ 
+      ai, 
+      maxIterations:10,
+      templateInstructions
+    });
     console.log('✅', smith.whoami());
-    
-    // Step 6: Subscribe Smith to filesystem events for operational awareness
-    console.log('🔗 Connecting Smith to filesystem event stream...');
-    smith.subscribeToFileSystemEvents(eventEmitter);
-    console.log('✅ Smith is now filesystem-aware\n');
     
     console.log('🧠 Teaching Smith tools (for context)...');
     smith.learn([weather.teach(), fs.teach()]);
@@ -138,9 +147,9 @@ Think like a luxury travel consultant with access to real-time weather intellige
     
     console.log('\n📊 Mission Summary:');
     console.log('==================');
-    console.log(`Goal: Ultimate Beach Destination Intelligence`);
+    console.log('Goal: Ultimate Beach Destination Intelligence');
     console.log(`Completed: ${result.completed}`);
-    console.log(`Iterations: ${result.iterations}`);``
+    console.log(`Iterations: ${result.iterations}`);
     console.log(`Messages: ${result.messages.length}`);
     
     if (result.completed) {

@@ -1,0 +1,41 @@
+{
+  "name": "Generic Agent Instructions",
+  "description": "Extracted prompt templates from Smith v1.0.1 for generic agent architecture",
+  "version": "1.0.0",
+  "author": "0en",
+  "github": "https://github.com/synthetism",
+  "templates": {
+    "taskBreakdown": {
+      "prompt": { 
+        "system": "Initial mission breakdown into discrete steps",
+        "user": "YOUR MISSION: {{task}}\nAVAILABLE TOOLS (ALL AVAILABLE TO YOUR AI ASSISTANT): {{tools}}\"\n\nTOOL SCHEMAS: {{schemas}}\n\nFORMAT: Use plain text response.\n\nBreak this mission down into discrete, executable steps and then follow them during execution phase. Each step should use ONE specific tool. Use only tools that are listed.\n\nRespond with a numbered breakdown and follow your plan to accomplish the mission. Try to achieve your mission in minimal steps.",    
+        "variables": ["task", "availableTools"]
+    }
+    },
+    "workerPromptGeneration": {
+      "prompt": {
+           "system": "Generate specific prompt for worker AI using template",
+            "user": "\n Your goal is to generate the next prompt for your AI executive assistant, that will call tools and respond with results.\n\nINSTRUCTIONS:\n1. Analyze what has been completed vs what still needs to be done\n2. Identify the next tool that needs to be used\n3. Use the minimal template \n {{promptTemplate}} , filling in:\n   - **task** = the specific single task for the worker\n   - **tool** = the exact tool to use (e.g., \"weather.getCurrentWeather\")\n 3. **context** - provide worker with current progress. 4.Provide minimum information for the worker to follow. \nCONSTRAINTS:\n- ONE TOOL ONE CALL\n\n- ALL TOOLS ARE SEQUENTIAL.\n- DO NOT REPEAT ACTIONS - DO NOT GIVE MULTIPLE ACTIONS IN ONE PROMPT.\n- Provide minimal context to worker follow the goal and update on current progress.\n- Provide worker with support and guidance - Be specific about tool parameters needed and provide instructions.\n- Use only tools from the list provided\n\n Use plain text."
+      },
+
+      "variables": ["promptTemplate"]
+    },
+    "resultAnalysis": {
+      "prompt" : {
+      "system": "Analyze worker response to determine mission completion status",
+      "user": "Analyze the worker AI response and determine mission status.\n\nWORKER AI RESPONSE: --- {{workerResponse}} ---\n\n Events emitted by the tools :\n{{systemEvents}}. Based on the response above and the conversation history, determine:\n- Is the ENTIRE mission completed successfully?\n- Or should we continue with the next task?\n- Are there any  operation failures that need to be addressed?\n\n NOTE: If there are event errors, the mission is NOT completed regardless of what the worker claims. Proceed with\n\nCheck for completion signals like \"MISSION_COMPLETE\", successful file saves, or mission objectives achieved.\nIMPORTANT: Verify that actual operation that your AI assistant, not just worker claims.\n\nRespond with ONLY one word:\n- \"completed\" if the entire mission is finished AND no errors exist\n- \"next_task\" if you need to continue with the next step OR if events errors require fixing. Adopt to errors. Try different strategies to achieve your mission if tools are failing."
+      },
+      "variables": ["workerResponse", "systemEvents"]      
+    },
+    "finalReport": {
+      "prompt": {
+        "system": "Generate mission completion summary report",
+        "user": "Mission completed! Generate a final summary report.\n\nCONVERSATION HISTORY:\n{{conversationHistory}}\n\nBased on the conversation history above, create a concise mission summary:\n\nMISSION SUMMARY:\n- Original Goal: [extract from history]\n- Steps Completed: [list key accomplishments]\n- Final Result: [what was achieved]\n- Status: Mission Complete\n\nGenerate ONLY a text summary report. Do not use any tools during this final report generation."
+      },
+
+      "variables": ["conversationHistory"]
+     
+    }    
+  }
+}
+

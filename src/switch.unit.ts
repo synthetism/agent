@@ -450,44 +450,6 @@ export class Switch extends Unit<SwitchProps> {
     return template;
   }
 
-  /**
-   * Filter and clean AI response content before storing in memory
-   * Removes verbose schemas, tool descriptions, and repetitive content
-   */
-  private cleanResponseContent(content: string): string {
-    // Remove tool schemas (large JSON objects)
-    let cleaned = content.replace(/TOOL SCHEMAS:.*?(?=\n\n|\n[A-Z]|$)/s, '');
-    
-    // Remove repetitive mission briefings
-    cleaned = cleaned.replace(/YOUR MISSION:.*?(?=\n\n|\n[A-Z]|$)/s, '');
-    
-    // Remove verbose available tools lists
-    cleaned = cleaned.replace(/AVAILABLE TOOLS.*?(?=\n\n|\n[A-Z]|$)/s, '');
-    
-    // Remove repetitive capability listings
-    cleaned = cleaned.replace(/Available capabilities:.*?(?=\n\n|\n[A-Z]|$)/s, '');
-    
-    // Extract just the core action/plan from verbose responses
-    const actionMatch = content.match(/Tool call:\s*(.+?)(?=\n\n|$)/s);
-    if (actionMatch) {
-      return actionMatch[1].trim();
-    }
-    
-    const planMatch = content.match(/\d+\)\s*(.+?)(?=\n\d+\)|$)/s);
-    if (planMatch) {
-      return planMatch[1].trim();
-    }
-    
-    // Fall back to first meaningful sentence if no patterns match
-    const lines = cleaned.split('\n').filter(line => 
-      line.trim() && 
-      !line.includes('Analysis:') && 
-      !line.includes('Completed:') &&
-      !line.includes('Remaining:')
-    );
-    
-    return lines.slice(0, 2).join(' ').trim() || `${content.substring(0, 200)}...`;
-  }
 
   /**
    * Get memory items as ChatMessages for AI consumption
@@ -544,7 +506,6 @@ METHODS:
 
  LEARNED TOOLS: ${this.capabilities().list().join(', ') || 'None'}
 
-COMPLETION SIGNALS: ${this.props.identity.completionSignals.join(', ')}
     `;
   }
 

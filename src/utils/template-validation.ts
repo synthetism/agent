@@ -171,4 +171,10 @@ export class TemplateValidator {
     
     return instructions as AgentInstructions;
   }
+
+  nonstatic() {
+
+
+  }
+  
 }

@@ -18,10 +18,6 @@ import { createAIFileSystem } from '@synet/fs-ai';
 import { AsyncFileSystem } from "@synet/fs";
 import { Weather, OpenWeather2 } from "@synet/weather"
 import type { AgentInstructions} from "../src/types/agent.types.js"
-import { Email } from "@synet/email"
-import { Hasher } from "@synet/hasher"
-import { Crypto } from "@synet/crypto"
-
 
 async function runSmithWeatherDemo() {
   console.log('🕶️  Agent Smith Weather Demo');
@@ -114,7 +110,7 @@ async function runSmithWeatherDemo() {
 
     console.log('✅ AI operator created');
     
-    console.log('🧠 Teaching AI the tools...');
+    console.log('Teaching AI the tools...');
     ai.learn([
       weather.teach(),
       fs.teach(),
@@ -131,20 +127,15 @@ async function runSmithWeatherDemo() {
       templateInstructions // Pass pre-parsed template object
     });
     console.log('✅', switchUnit.whoami());
-    console.log('🎯 Switch now has template-driven task breakdown capability');
-
-    // Step 6: Subscribe Switch to filesystem events for operational awareness
-    console.log('🔗 Connecting Switch to filesystem event stream...');
-    switchUnit.subscribeToEvents(eventEmitter);
-    console.log('✅ Switch is now filesystem-aware\n');
+    console.log('Switch now has template-driven task breakdown capability');
     
-    console.log('🧠 Teaching Switch tools (for context)...');
+    console.log('Teaching Switch tools (for context)...');
     switchUnit.learn([weather.teach(), fs.teach()]);
     console.log('✅', switchUnit.whoami());
     console.log();
 
     // Step 7: Smith creative beach destination mission with filesystem awareness
-    console.log('�️  Executing Smith creative beach destination mission...\n');
+    console.log(' Executing Smith creative beach destination mission...\n');
     
     const mission = `
     
