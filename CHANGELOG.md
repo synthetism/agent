@@ -23,5 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recover from tool errors, trying different strategies
 - Identify when the mission is complete and exit the loop.
 - Saving collected results in files or sending emails. 
+- React and adopt to events emitted by the tools (errors or success)
 
-Overall, this is a universal solution for both simple tasks and complex, multi-step and creative tasks.
+Overall, this is a solid starting point, a robust solution for both simple tasks and complex, multi-step and creative workflows.
+
+I appreciate your feedback and open for dialogue `anton@synthetism.ai`
