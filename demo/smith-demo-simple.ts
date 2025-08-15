@@ -30,8 +30,8 @@ async function runSmithWeatherDemo() {
   const provider = 'openai';
   const model = 'gpt-5-mini';
 
-  const agent_provider = 'deepseek';
-  const agent_model = 'deepseek-chat';
+  const agent_provider = 'openai';
+  const agent_model = 'gpt-5-mini';
 
   try {
     // Step 1: Load API keys and template instructions
@@ -49,18 +49,18 @@ async function runSmithWeatherDemo() {
     
     // Parse template instructions outside (lightweight approach)
     const templateInstructions = JSON.parse(
-      readFileSync(path.join('config', 'agent-instructions.json'), 'utf-8')
+      readFileSync(path.join('config', 'smith-instructions.json'), 'utf-8')
     ) as AgentInstructions;
     console.log('✅ API keys and templates loaded');
     console.log(`📋 Template loaded: ${templateInstructions.name} v${templateInstructions.version}\n`);
 
     // Step 2: Create tools first
     console.log('🛠️  Creating tools...');
-     const weather = WeatherUnit.create({
+      const weather = WeatherUnit.create({
       apiKey: weatherConfig.apiKey
     }); 
 
-   /*  const openweather  = new OpenWeather2({ 
+    /*  const openweather  = new OpenWeather2({ 
       apiKey:weatherConfig.apiKey,
       timeout: 10000 
     });
@@ -94,23 +94,22 @@ async function runSmithWeatherDemo() {
     
     // Setup event monitoring
     const eventEmitter = observableFs.getEventEmitter();
-    console.log('👁️  Setting up filesystem event monitoring...');
-    
-   
-    eventEmitter.subscribe('file.write', {
-      update: (event) => {
-        const { type, data } = event;
-        if (data.error) {
+    console.log('Setting up filesystem event monitoring...');
+
+
+    eventEmitter.on('file.write', (event) => {
+      const { type, data, error } = event;
+      if (error) {
 
           smith.addEvent({
                 type: type,
-                message:`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`,
+                message:`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`,
                 timestamp: new Date().toISOString(),
 
           });
 
-          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);      
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`);      
+          console.log(`   Path: ${data.filePath}, `);
         } else {
 
            smith.addEvent({
@@ -121,27 +120,52 @@ async function runSmithWeatherDemo() {
           });
 
           console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
+          console.log(`   Path: ${data.filePath}, Result: ${data.result} bytes written`);
       
 
         }
-      }
-    });
+      });
 
-      eventEmitter.subscribe('file.ensureDir', {
-      update: (event) => {
-        const { type, data } = event;
-        if (data.error) {
+       eventEmitter.on('file.read', (event) => {
+      const { type, data, error } = event;
+      if (error) {
 
           smith.addEvent({
                 type: type,
-                message:`🔴 [${type}] - ERROR: ${data.error.message}`,
+                message:`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`,
                 timestamp: new Date().toISOString(),
 
           });
 
-          console.log (`🔴 [${type}] - ERROR: ${data.error.message}`);      
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`);      
+          console.log(`   Path: ${data.filePath}, `);
+        } else {
+
+           smith.addEvent({
+                type: type,
+                message:`🟢 [FS-EVENT] ${type} - SUCCESS `,
+                timestamp: new Date().toISOString(),
+
+          });
+
+          console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
+          console.log(`   Path: ${data.filePath}, Result: ${data.result} bytes written`);
+      
+        }
+      });
+
+      eventEmitter.on('file.ensureDir', (event) => {
+        const { type, data, error } = event;
+        if (error) {
+
+          smith.addEvent({
+                type: type,
+                message:`🔴 [${type}] - ERROR: ${error.message}`,
+                timestamp: new Date().toISOString(),
+
+          });
+          console.log (`🔴 [${type}] - ERROR: ${error.message}`);
+          console.log(`   Path: ${data.filePath}`);
         } else {
 
            smith.addEvent({
@@ -152,13 +176,12 @@ async function runSmithWeatherDemo() {
           });
 
           console.log(`🟢 [${type}] - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+          console.log(`   Path: ${data.filePath}`);
       
 
         }
-      }
-    });
-
+    })
+    
     // Create the AsyncFileSystem unit
     const fs = AsyncFileSystem.create({ adapter: observableFs });
     console.log('✅ FS-AI tool ready with event monitoring\n');
@@ -185,7 +208,6 @@ async function runSmithWeatherDemo() {
     console.log('🧠 Teaching AI the tools...');
     ai.learn([
       weather.teach(),
-      hasher.teach(),
       fs.teach(),
     ]);
     console.log('✅ AI learned tools\n');
@@ -210,13 +232,11 @@ async function runSmithWeatherDemo() {
     console.log();
 
     // Step 7: Smith creative beach destination mission with filesystem awareness
-    console.log('�️  Executing Smith creative beach destination mission...\n');
-    
-   const mission = 'Find out the weather in New York, and save report to \'vault/new-york-weather-report.md\'';
+    console.log('�️  Executing Smith simple demo mission...\n');
+  const mission = 'Find out the weather in New York, and save report to \'vault/new-york-weather-report.md\'';
    
-
     const result = await smith.run(mission);
-    
+
     console.log('\n📊 Mission Summary:');
     console.log('==================');
     console.log('Goal: Ultimate Beach Destination Intelligence');

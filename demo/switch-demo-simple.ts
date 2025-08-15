@@ -129,24 +129,23 @@ async function runSmithWeatherDemo() {
 
     const memory = switchUnit.getMemory();
     const unsubscribePush = memory.on('push', (event: MemoryPushEvent) => {
-      console.log(`🧠 PUSH: Added item ${event.item.id} \n Memory contents ${JSON.stringify(event.item.data)} \n Total: ${event.total}`);
+      console.log(`🧠 PUSH: Added item ${event.data.item.id} \n Memory contents ${JSON.stringify(event.data.item.data)} \n Total: ${event.data.total}`);
     });
     
 
-    eventEmitter.subscribe('file.write', {
-      update: (event) => {
-        const { type, data } = event;
-        if (data.error) {
+      eventEmitter.on('file.write', (event) => {
+      const { type, data, error } = event;
+      if (error) {
 
           switchUnit.addEvent({
                 type: type,
-                message:`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`,
+                message:`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`,
                 timestamp: new Date().toISOString(),
 
           });
 
-          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);      
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+          console.log (`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`);      
+          console.log(`   Path: ${data.filePath}, `);
         } else {
 
            switchUnit.addEvent({
@@ -157,27 +156,24 @@ async function runSmithWeatherDemo() {
           });
 
           console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
+          console.log(`   Path: ${data.filePath}, Result: ${data.result} bytes written`);
       
 
         }
-      }
-    });
+      });
 
-      eventEmitter.subscribe('file.ensureDir', {
-      update: (event) => {
-        const { type, data } = event;
-        if (data.error) {
+      eventEmitter.on('file.ensureDir', (event) => {
+        const { type, data, error } = event;
+        if (error) {
 
           switchUnit.addEvent({
                 type: type,
-                message:`🔴 [${type}] - ERROR: ${data.error.message}`,
+                message:`🔴 [${type}] - ERROR: ${error.message}`,
                 timestamp: new Date().toISOString(),
 
           });
-
-          console.log (`🔴 [${type}] - ERROR: ${data.error.message}`);      
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+          console.log (`🔴 [${type}] - ERROR: ${error.message}`);
+          console.log(`   Path: ${data.filePath}`);
         } else {
 
            switchUnit.addEvent({
@@ -188,12 +184,11 @@ async function runSmithWeatherDemo() {
           });
 
           console.log(`🟢 [${type}] - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
+          console.log(`   Path: ${data.filePath}`);
       
 
         }
-      }
-    });
+    })
 
 
     
@@ -202,7 +197,7 @@ async function runSmithWeatherDemo() {
     console.log('✅', switchUnit.whoami());
     console.log();
 
-    const mission = 'Find out the weather in New York, ensure `vault` dir exists and save report to \'vault/new-york-weather-report.md\'';
+    const mission = 'Your goal is to find out the weather in New York, and save report to \'vault/new-york-weather-report.md\'';
     const result = await switchUnit.run(mission);
     
     console.log('\nMission Summary:');

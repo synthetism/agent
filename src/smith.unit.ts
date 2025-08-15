@@ -305,6 +305,7 @@ export class Smith extends Unit<SmithProps> {
                 promptTemplate: this.props.identity.promptTemplate
         })
            
+        
         // Add the prompt generation request to Smith's memory
         smithMemory.push({
           role: 'user',
@@ -320,12 +321,15 @@ export class Smith extends Unit<SmithProps> {
         
         console.log(`[${this.props.dna.id}] Generated worker prompt: ${workerPrompt}`);
         
+   
         // Add prompt to worker memory
         workerMemory.push({
           role: 'user',
-          content: workerPrompt
+          content: workerPrompt,
         });
 
+ 
+   
         // Worker AI executes with tools AND has memory of previous work
         const response = await this.props.ai.chatWithTools(workerMemory);
         console.log(`[Worker]: ${response.content}`);
@@ -336,13 +340,13 @@ export class Smith extends Unit<SmithProps> {
           content: response.content
         });
 
-        // Add to memory
+        // Add to memory with proper user/assistant alternation
         smithMemory.push({
-          role: 'assistant',
-          content: `Worker task: ${workerPrompt}`
+          role: 'user',
+          content: `Execute: ${workerPrompt}`
         }, {
           role: 'assistant',
-          content: `Worker response: ${response.content}`
+          content: response.content
         });
 
          /* smithMemory.push({
@@ -403,7 +407,7 @@ export class Smith extends Unit<SmithProps> {
       }
 
     } catch (error: unknown) {
-      console.error('❌ [${this.props.dna.id}] Execution error:', error);
+      console.error(`❌ [${this.props.dna.id}] Execution error:`, error);
       smithMemory.push({
         role: 'user',
         content: `Error occurred: ${error instanceof Error ? error.message : String(error)}. ${this.props.identity.errorRecovery.fallbackStrategy}`

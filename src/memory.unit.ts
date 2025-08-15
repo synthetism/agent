@@ -14,7 +14,7 @@
  * 
  * Events: Emits 'push', 'pop', 'clear', 'recall' events for debugging
  * 
- * @author Developer
+ * @author SYNET ALPHA
  * @version 1.0.0
  * @follows Unit Architecture Doctrine v1.0.8
  */
@@ -27,14 +27,16 @@ import {
   type UnitCore,
   type Capabilities,
   type Schema,
-  type Validator 
+  type Validator,
+  EventEmitter,
+  type Event 
 } from '@synet/unit';
 import { 
   Capabilities as CapabilitiesClass, 
   Schema as SchemaClass, 
   Validator as ValidatorClass 
 } from '@synet/unit';
-import { EventEmitter } from 'node:events';
+
 import type { ChatMessage } from '@synet/ai';
 
 
@@ -58,47 +60,55 @@ interface MemoryProps extends UnitProps {
   eventEmitter: EventEmitter;
 }
 
-// Memory event types
-export interface MemoryPushEvent {
+// Memory event types (Unit@1.0.9 compatible)
+export interface MemoryPushEvent extends Event {
   type: 'push';
-  item: MemoryItem;
-  total: number;
-  timestamp: string;
+  data: {
+    item: MemoryItem;
+    total: number;
+  };
 }
 
-export interface MemoryPopEvent {
+export interface MemoryPopEvent extends Event {
   type: 'pop';
-  item: MemoryItem | null;
-  total: number;
-  timestamp: string;
+  data: {
+    item: MemoryItem | null;
+    total: number;
+  };
 }
 
-export interface MemoryListEvent {
+export interface MemoryListEvent extends Event {
   type: 'list';
-  count: number;
-  timestamp: string;
+  data: {
+    count: number;
+  };
 }
 
-export interface MemoryRecallEvent {
+export interface MemoryRecallEvent extends Event {
   type: 'recall';
-  query: string;
-  results: number;
-  items: MemoryItem[];
-  timestamp: string;
+  data: {
+    query: string;
+    results: number;
+    items: MemoryItem[];
+  };
 }
 
-export interface MemoryClearEvent {
+export interface MemoryClearEvent extends Event {
   type: 'clear';
-  cleared: number;
-  timestamp: string;
+  data: {
+    cleared: number;
+  };
 }
 
-export interface MemoryEvictedEvent {
+export interface MemoryEvictedEvent extends Event {
   type: 'evicted';
-  removed: MemoryItem;
-  reason: string;
+  data: {
+    removed: MemoryItem;
+    reason: string;
+  };
 }
 
+// Union type for all memory events
 export type MemoryEvent = 
   | MemoryPushEvent 
   | MemoryPopEvent 
@@ -106,7 +116,6 @@ export type MemoryEvent =
   | MemoryRecallEvent 
   | MemoryClearEvent 
   | MemoryEvictedEvent;
-
 
 export class Memory extends Unit<MemoryProps> {
   
@@ -195,32 +204,6 @@ export class Memory extends Unit<MemoryProps> {
     return this.props.eventEmitter;
   }
 
-  /**
-   * Subscribe to memory events with type safety and auto-unsubscribe
-   * Returns unsubscribe function for clean cleanup
-   */
-  on<T extends MemoryEvent>(
-    eventType: T['type'], 
-    handler: (event: T) => void
-  ): () => void {
-    this.props.eventEmitter.on(eventType, handler);
-    
-    // Return unsubscribe function
-    return () => {
-      this.props.eventEmitter.off(eventType, handler);
-    };
-  }
-
-  /**
-   * Manual unsubscribe (for cases where you keep handler reference)
-   */
-  off<T extends MemoryEvent>(
-    eventType: T['type'], 
-    handler: (event: T) => void
-  ): void {
-    this.props.eventEmitter.off(eventType, handler);
-  }
-
   // =============================================================================
   // NATIVE CAPABILITIES
   // =============================================================================
@@ -244,10 +227,13 @@ export class Memory extends Unit<MemoryProps> {
       if (this.props.enableEvents && removed) {
         const evictedEvent: MemoryEvictedEvent = {
           type: 'evicted',
-          removed,
-          reason: 'max_items_exceeded'
+          data: {
+            removed,
+            reason: 'max_items_exceeded'
+          },
+          timestamp: new Date()
         };
-        this.props.eventEmitter.emit('evicted', evictedEvent);
+        this.props.eventEmitter.emit(evictedEvent);
       }
     }
 
@@ -255,11 +241,13 @@ export class Memory extends Unit<MemoryProps> {
     if (this.props.enableEvents) {
       const pushEvent: MemoryPushEvent = {
         type: 'push',
-        item: item as MemoryItem,
-        total: this.props.items.length,
-        timestamp: new Date().toISOString()
+        data: {
+          item: item as MemoryItem,
+          total: this.props.items.length,
+        },
+        timestamp: new Date()
       };
-      this.props.eventEmitter.emit('push', pushEvent);
+      this.props.eventEmitter.emit(pushEvent);
     }
 
     return item.id;
@@ -275,11 +263,13 @@ export class Memory extends Unit<MemoryProps> {
     if (this.props.enableEvents) {
       const popEvent: MemoryPopEvent = {
         type: 'pop',
-        item,
-        total: this.props.items.length,
-        timestamp: new Date().toISOString()
+        data: {
+          item,
+          total: this.props.items.length,
+        },
+        timestamp: new Date()
       };
-      this.props.eventEmitter.emit('pop', popEvent);
+      this.props.eventEmitter.emit(popEvent);
     }
 
     return item;
@@ -295,10 +285,12 @@ export class Memory extends Unit<MemoryProps> {
     if (this.props.enableEvents) {
       const listEvent: MemoryListEvent = {
         type: 'list',
-        count: items.length,
-        timestamp: new Date().toISOString()
+        data: {
+          count: items.length,
+        },
+        timestamp: new Date()
       };
-      this.props.eventEmitter.emit('list', listEvent);
+      this.props.eventEmitter.emit(listEvent);
     }
 
     return items;
@@ -319,12 +311,14 @@ export class Memory extends Unit<MemoryProps> {
     if (this.props.enableEvents) {
       const recallEvent: MemoryRecallEvent = {
         type: 'recall',
-        query,
-        results: results.length,
-        items: results,
-        timestamp: new Date().toISOString()
+        data: {
+          query,
+          results: results.length,
+          items: results,
+        },
+        timestamp: new Date()
       };
-      this.props.eventEmitter.emit('recall', recallEvent);
+      this.props.eventEmitter.emit(recallEvent);
     }
 
     return results;
@@ -341,10 +335,12 @@ export class Memory extends Unit<MemoryProps> {
     if (this.props.enableEvents) {
       const clearEvent: MemoryClearEvent = {
         type: 'clear',
-        cleared: count,
-        timestamp: new Date().toISOString()
+        data: {
+          cleared: count,
+        },
+        timestamp: new Date()
       };
-      this.props.eventEmitter.emit('clear', clearEvent);
+      this.props.eventEmitter.emit(clearEvent);
     }
 
     return count;

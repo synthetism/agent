@@ -44,7 +44,7 @@
     "@biomejs/biome": "^1.9.4",
     "@synet/crypto": "^1.0.1",
     "@synet/email": "^1.0.2",
-    "@synet/fs": "^2.0.1",
+    "@synet/fs": "^2.0.3",
     "@synet/fs-ai": "^1.0.0",
     "@synet/hasher": "^1.0.2",
     "@synet/weather": "^1.0.1",
@@ -83,6 +83,6 @@
   },
   "dependencies": {
     "@synet/ai": "^1.0.5",
-    "@synet/unit": "^1.0.7"
+    "@synet/unit": "^1.0.9"
   }
 }
