@@ -69,17 +69,15 @@ async function runSmithWeatherDemo() {
     // Setup event monitoring
     const eventEmitter = observableFs.getEventEmitter();
     console.log('👁️  Setting up filesystem event monitoring...');
-    
-    eventEmitter.subscribe('file.write', {
-      update: (event) => {
-        const { type, data } = event;
-        if (data.error) {
-          console.log(`🔴 [FS-EVENT] ${type} - ERROR: ${data.error.message}`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}`);
-        } else {
-          console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
-          console.log(`   Path: ${data.filePath}, Operation: ${data.operation}, Result: ${data.result} bytes written`);
-        }
+
+    eventEmitter.on('file.write', (event) => {
+      const { type, data, error } = event;
+      if (error) {
+        console.log(`🔴 [FS-EVENT] ${type} - ERROR: ${error.message}`);
+        console.log(`   Path: ${data.filePath}`);
+      } else {
+        console.log(`🟢 [FS-EVENT] ${type} - SUCCESS`);
+        console.log(`   Path: ${data.filePath}, Result: ${data.result} bytes written`);
       }
     });
 

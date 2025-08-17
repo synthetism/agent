@@ -16,7 +16,7 @@ import { WeatherUnit } from '../src/tools/weather.unit.js';
 import { NodeFileSystem, ObservableFileSystem, FilesystemEvent } from '@synet/fs/promises';
 import { createAIFileSystem } from '@synet/fs-ai';
 import { AsyncFileSystem } from "@synet/fs";
-import { Weather, OpenWeather2 } from "@synet/weather"
+import { Weather, OpenWeather2, type WeatherEvent } from "@synet/weather"
 import type { AgentInstructions} from "../src/types/agent.types.js"
 import { Email } from "@synet/email"
 import { Hasher } from "@synet/hasher"
@@ -131,7 +131,24 @@ async function runSmithWeatherDemo() {
     const unsubscribePush = memory.on('push', (event: MemoryPushEvent) => {
       console.log(`🧠 PUSH: Added item ${event.data.item.id} \n Memory contents ${JSON.stringify(event.data.item.data)} \n Total: ${event.data.total}`);
     });
-    
+     
+     weather.on('weather.current', (event:  WeatherEvent) => {
+      const { type, data, error } = event;
+      if (error) {
+        
+        console.error(`Error fetching current weather: ${error.message}`);
+      } else {
+        switchUnit.addEvent({
+            type: type,
+            message:`🟢 [WEATHER] ${type} - SUCCESS`,
+            timestamp: new Date().toISOString(),
+        });
+
+        console.log(`Current weather data for ${data.location}:`);
+        console.log(`Temperature: ${data.temperature}°${data.units}`);
+        console.log(`Description: ${data.description}`);
+      }
+    });
 
       eventEmitter.on('file.write', (event) => {
       const { type, data, error } = event;
