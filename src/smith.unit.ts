@@ -137,11 +137,11 @@ export class Smith extends Unit<SmithProps> {
 
     // No file parsing here - template instructions come pre-parsed from outside
     const props: SmithProps = {
-      dna: {
+      dna: createUnitSchema({
         id: 'smith',
         version: VERSION,
         description: "AI Agent - Mission Orchestrator"
-      },
+      }),
       ai: config.ai,
       agent: config.agent || config.ai,
       identity,
@@ -159,22 +159,21 @@ export class Smith extends Unit<SmithProps> {
 
  
   
-     addEvent(event: AgentEvent): void {
-        // Ensure timestamp if not provided
-        if (!event.timestamp) {
-          event.timestamp = new Date().toISOString();
-        }
-        
-        this.props.eventMemory.push(event);
-        
-        // Keep only last 10 events to prevent memory bloat
-        if (this.props.eventMemory.length > 10) {
-          this.props.eventMemory = this.props.eventMemory.slice(-10);
-        }
-     }
+    addEvent(event: AgentEvent): void {
+      // Ensure timestamp if not provided
+      if (!event.timestamp) {
+        event.timestamp = new Date().toISOString();
+      }
+      
+      this.props.eventMemory.push(event);
+      
+      // Keep only last 10 events to prevent memory bloat
+      if (this.props.eventMemory.length > 10) {
+        this.props.eventMemory = this.props.eventMemory.slice(-10);
+      }
+    }
   
-  
-  getLastEvent(): string | null {
+   getLastEvent(): string | null {
       const lastEvent = this.props.eventMemory[this.props.eventMemory.length - 1];
       if (!lastEvent) return null;
       

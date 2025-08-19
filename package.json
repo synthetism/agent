@@ -83,6 +83,6 @@
   },
   "dependencies": {
     "@synet/ai": "^1.0.5",
-    "@synet/unit": "^1.0.9"
+    "@synet/unit": "^1.1.0"
   }
 }

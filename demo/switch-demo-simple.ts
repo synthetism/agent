@@ -132,7 +132,7 @@ async function runSmithWeatherDemo() {
       console.log(`🧠 PUSH: Added item ${event.data.item.id} \n Memory contents ${JSON.stringify(event.data.item.data)} \n Total: ${event.data.total}`);
     });
      
-     weather.on('weather.current', (event:  WeatherEvent) => {
+     weather.on('weather.*', (event:  WeatherEvent) => {
       const { type, data, error } = event;
       if (error) {
         
@@ -214,7 +214,7 @@ async function runSmithWeatherDemo() {
     console.log('✅', switchUnit.whoami());
     console.log();
 
-    const mission = 'Your goal is to find out the weather in New York, and save report to \'vault/new-york-weather-report.md\'';
+    const mission = 'Your goal is to find out current  weather conditions in New York using provided tools, and save report to \'vault/new-york-weather-report.md\'';
     const result = await switchUnit.run(mission);
     
     console.log('\nMission Summary:');
